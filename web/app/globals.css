@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --lc-primary: #F4A261;
+  --lc-secondary: #B48EAD;
+  --lc-accent: #81A1C1;
+  --lc-bg: #1a1a2e;
+  --lc-surface: #2E3440;
+  --lc-text: #ECEFF4;
+  --lc-muted: #4C566A;
+}
+
+body {
+  background-color: var(--lc-bg);
+  color: var(--lc-text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--lc-bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--lc-muted);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--lc-secondary);
+}
+
+/* Code blocks */
+pre {
+  background: var(--lc-bg) !important;
+  border: 1px solid var(--lc-muted);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  overflow-x: auto;
+}
+
+code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.85em;
+}
+
+/* Smooth transitions for theme changes */
+* {
+  transition-property: background-color, border-color, color;
+  transition-duration: 200ms;
+  transition-timing-function: ease-out;
+}
+
+/* Input/button transitions should be faster */
+input, button, a {
+  transition-duration: 150ms;
+}

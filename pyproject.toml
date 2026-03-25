@@ -1,0 +1,52 @@
+[project]
+name = "lifeclaw"
+version = "0.1.0"
+description = "LifeClaw - Hybrid AI Assistant for Terminal & Web"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Karthik", email = "karthik20517@gmail.com" }]
+keywords = ["ai", "agent", "assistant", "ollama", "mcp"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "typer>=0.12.0,<1.0.0",
+    "rich>=13.0.0,<15.0.0",
+    "prompt-toolkit>=3.0.50,<4.0.0",
+    "pydantic>=2.0.0,<3.0.0",
+    "pydantic-settings>=2.0.0,<3.0.0",
+    "httpx>=0.27.0,<1.0.0",
+    "websockets>=12.0,<17.0",
+    "openai>=1.30.0",
+    "anthropic>=0.30.0,<1.0.0",
+    "questionary>=2.0.0,<3.0.0",
+    "loguru>=0.7.0,<1.0.0",
+    "mcp>=1.0.0,<2.0.0",
+    "tiktoken>=0.7.0,<1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.4.0",
+]
+
+[project.scripts]
+lifeclaw = "lifeclaw.cli.commands:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["lifeclaw"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
