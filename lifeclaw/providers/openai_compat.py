@@ -15,11 +15,27 @@ from lifeclaw.providers.base import (
 
 # Provider presets: name -> (base_url, env_key_name)
 PRESETS = {
+    # Major cloud
     "openai": ("https://api.openai.com/v1", "OPENAI_API_KEY"),
+    "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai/", "GEMINI_API_KEY"),
+    # Aggregators
     "openrouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY"),
+    # Specialized
     "deepseek": ("https://api.deepseek.com/v1", "DEEPSEEK_API_KEY"),
     "groq": ("https://api.groq.com/openai/v1", "GROQ_API_KEY"),
-    "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai/", "GEMINI_API_KEY"),
+    "mistral": ("https://api.mistral.ai/v1", "MISTRAL_API_KEY"),
+    # China providers
+    "moonshot": ("https://api.moonshot.cn/v1", "MOONSHOT_API_KEY"),
+    "zhipu": ("https://open.bigmodel.cn/api/paas/v4", "ZHIPU_API_KEY"),
+    "dashscope": ("https://dashscope.aliyuncs.com/compatible-mode/v1", "DASHSCOPE_API_KEY"),
+    "minimax": ("https://api.minimax.chat/v1", "MINIMAX_API_KEY"),
+    "siliconflow": ("https://api.siliconflow.cn/v1", "SILICONFLOW_API_KEY"),
+    "volcengine": ("https://ark.cn-beijing.volces.com/api/v3", "VOLCENGINE_API_KEY"),
+    # Cloud infra
+    "azure_openai": (None, "AZURE_OPENAI_API_KEY"),  # base URL set per-deployment
+    # Local
+    "vllm": ("http://localhost:8000/v1", "VLLM_API_KEY"),
+    # Custom
     "custom": (None, None),
 }
 

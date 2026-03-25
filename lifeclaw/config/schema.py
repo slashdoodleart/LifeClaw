@@ -13,13 +13,29 @@ class ProviderConfig(BaseModel):
 
 
 class ProvidersConfig(BaseModel):
+    # Local
     ollama: ProviderConfig = Field(default_factory=ProviderConfig)
+    vllm: ProviderConfig = Field(default_factory=ProviderConfig)
+    # Major cloud
     openai: ProviderConfig = Field(default_factory=ProviderConfig)
     anthropic: ProviderConfig = Field(default_factory=ProviderConfig)
+    gemini: ProviderConfig = Field(default_factory=ProviderConfig)
+    # Aggregators
     openrouter: ProviderConfig = Field(default_factory=ProviderConfig)
+    # Specialized
     deepseek: ProviderConfig = Field(default_factory=ProviderConfig)
     groq: ProviderConfig = Field(default_factory=ProviderConfig)
-    gemini: ProviderConfig = Field(default_factory=ProviderConfig)
+    mistral: ProviderConfig = Field(default_factory=ProviderConfig)
+    # China providers
+    moonshot: ProviderConfig = Field(default_factory=ProviderConfig)
+    zhipu: ProviderConfig = Field(default_factory=ProviderConfig)
+    dashscope: ProviderConfig = Field(default_factory=ProviderConfig)
+    minimax: ProviderConfig = Field(default_factory=ProviderConfig)
+    siliconflow: ProviderConfig = Field(default_factory=ProviderConfig)
+    volcengine: ProviderConfig = Field(default_factory=ProviderConfig)
+    # Cloud infra
+    azure_openai: ProviderConfig = Field(default_factory=ProviderConfig)
+    # Any OpenAI-compatible endpoint
     custom: ProviderConfig = Field(default_factory=ProviderConfig)
 
 

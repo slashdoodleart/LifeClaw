@@ -22,27 +22,42 @@ def resolve_provider(config: Config, model_override: str | None = None) -> tuple
     model_str = model_override or config.agent.model
     provider_name = config.agent.provider
 
+    # All known provider prefixes
+    known = {
+        "ollama", "openai", "anthropic", "openrouter", "deepseek", "groq",
+        "gemini", "mistral", "moonshot", "zhipu", "dashscope", "minimax",
+        "siliconflow", "volcengine", "azure_openai", "vllm", "custom",
+    }
+
     # Parse "provider/model" format
     if "/" in model_str:
         parts = model_str.split("/", 1)
         candidate = parts[0].lower()
-        known = {"ollama", "openai", "anthropic", "openrouter", "deepseek", "groq", "gemini", "custom"}
         if candidate in known:
             provider_name = candidate
             model_str = parts[1]
         elif candidate in ("claude", "gpt"):
-            # Handle "claude-xxx" or "gpt-xxx" shorthand
             provider_name = "anthropic" if candidate == "claude" else "openai"
             model_str = "/".join(parts)
 
     # Auto-detect
     if provider_name == "auto":
-        if any(k in model_str for k in ("llama", "mistral", "gemma", "phi", "qwen", "codellama", "deepseek-coder")):
+        if any(k in model_str for k in ("llama", "gemma", "phi", "qwen", "codellama", "starcoder", "yi-")):
             provider_name = "ollama"
         elif "claude" in model_str:
             provider_name = "anthropic"
         elif "gpt" in model_str or "o1" in model_str or "o3" in model_str:
             provider_name = "openai"
+        elif "deepseek" in model_str:
+            provider_name = "deepseek"
+        elif "mistral" in model_str or "mixtral" in model_str:
+            provider_name = "mistral"
+        elif "moonshot" in model_str or "kimi" in model_str:
+            provider_name = "moonshot"
+        elif "glm" in model_str:
+            provider_name = "zhipu"
+        elif "qwen" in model_str:
+            provider_name = "dashscope"
         else:
             provider_name = "ollama"  # Default to local
 

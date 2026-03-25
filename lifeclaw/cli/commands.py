@@ -1,4 +1,4 @@
-"""CLI commands for LifeClaw — Claude Code-style terminal experience."""
+"""CLI commands for LifeClaw — terminal experience."""
 
 import asyncio
 import os
@@ -58,9 +58,9 @@ MODES = {
     },
     "researcher": {
         "label": "researcher",
-        "description": "Research mode — thorough analysis, literature review, paper generation (AutoResearchClaw-inspired)",
+        "description": "Research mode — thorough analysis, literature review, paper generation",
         "system_addendum": (
-            "\nYou are in RESEARCHER MODE with AutoResearchClaw-inspired capabilities:\n"
+            "\nYou are in RESEARCHER MODE with deep analytical capabilities:\n"
             "- Explore broadly before answering\n"
             "- Search multiple files, directories, and web sources\n"
             "- For academic topics: search arXiv, Semantic Scholar, OpenAlex\n"
@@ -120,19 +120,45 @@ async def _chat_async(
     console = Console(theme=make_rich_theme(theme))
     current_mode = initial_mode if initial_mode in MODES else "general"
 
-    # Compact banner (Claude Code style)
+    # Welcome banner with theme-colored box
     import random
     from lifeclaw.config.defaults import TIPS
 
     console.print()
-    title = Text()
-    title.append("  LifeClaw", style=f"bold {theme.primary}")
-    title.append(f" v{__version__}", style=f"{theme.muted}")
-    console.print(title)
-    console.print(f"  [{theme.muted}]model: {model_override or config.agent.model} · mode: {current_mode} · theme: {theme.name}[/]")
-    console.print(f"  [{theme.muted}]/help for commands · /mode to switch · exit to quit[/]")
-    # Random tip like Claude Code
-    console.print(f"  [{theme.muted}]{random.choice(TIPS)}[/]")
+
+    # Build the welcome panel content
+    model_display = model_override or config.agent.model
+    mcp_count = len(config.mcp_servers)
+
+    left_col = Text()
+    left_col.append("\n", style="")
+    left_col.append("  LifeClaw", style=f"bold {theme.primary}")
+    left_col.append(f" v{__version__}\n", style=f"{theme.muted}")
+    left_col.append(f"\n  [{theme.muted}]", style="")
+    left_col.append(f"  {model_display}", style=f"{theme.accent}")
+    left_col.append(f"  ·  ", style=f"{theme.muted}")
+    left_col.append(f"{current_mode}", style=f"bold {theme.secondary}")
+    left_col.append(f"  ·  ", style=f"{theme.muted}")
+    left_col.append(f"{theme.name}", style=f"{theme.primary}")
+    if mcp_count:
+        left_col.append(f"  ·  ", style=f"{theme.muted}")
+        left_col.append(f"{mcp_count} MCP", style=f"{theme.muted}")
+    left_col.append("\n", style="")
+
+    tip = random.choice(TIPS)
+    right_text = (
+        f"[{theme.accent}]Tips[/]\n"
+        f"[{theme.muted}]{tip}[/]\n"
+        f"[{theme.muted}]/help for commands · /mode to switch · exit to quit[/]"
+    )
+
+    console.print(Panel(
+        left_col,
+        title=f"[{theme.primary} bold]LifeClaw[/]",
+        subtitle=f"[{theme.muted}]{tip}[/]",
+        border_style=theme.primary,
+        padding=(0, 1),
+    ))
     console.print()
 
     # Initialize provider
@@ -196,7 +222,7 @@ async def _chat_async(
 
     try:
         while True:
-            # Mode-aware prompt (like Claude Code's "you >" or "coder >")
+            # Mode-aware prompt
             mode_color = {
                 "coder": theme.accent,
                 "general": theme.primary,
@@ -244,7 +270,7 @@ async def _chat_async(
                 # Status line
                 renderer.finish()
 
-                # Show random tip ~25% of the time (like Claude Code)
+                # Show random tip ~25% of the time
                 if random.random() < 0.25:
                     console.print(f"  [{theme.muted}]{random.choice(TIPS)}[/]")
 
@@ -355,9 +381,58 @@ async def _handle_command(
         if arg:
             config.agent.model = arg
             save_config(config)
-            console.print(f"  [{theme.success}]Model → {arg}. Restart to apply.[/]")
+            # Hot-swap provider and model
+            from lifeclaw.providers.registry import resolve_provider
+            try:
+                new_provider, new_model = resolve_provider(config, arg)
+                agent.provider = new_provider
+                agent.model = new_model
+                status.model = new_model
+                console.print(f"  [{theme.success}]Model → {arg} (live)[/]")
+            except ValueError as e:
+                console.print(f"  [{theme.error}]{e}[/]")
         else:
-            console.print(f"  [{theme.info}]Current: {config.agent.model}[/]")
+            # Live model picker — fetch Ollama models + show manual entry
+            import questionary
+            model_choices = []
+            # Try fetching local Ollama models
+            try:
+                from lifeclaw.providers.ollama import OllamaProvider
+                ollama_base = config.providers.ollama.api_base or "http://localhost:11434"
+                ollama = OllamaProvider(base_url=ollama_base)
+                models = await ollama.list_models()
+                for m in models[:30]:
+                    model_choices.append(questionary.Choice(f"ollama/{m}", value=f"ollama/{m}"))
+            except Exception:
+                pass
+            model_choices.append(questionary.Choice("(enter custom model string)", value="__custom__"))
+            selected = await asyncio.to_thread(
+                lambda: questionary.select(
+                    "Select model (arrow keys):",
+                    choices=model_choices,
+                    instruction="(↑↓ to navigate, Enter to select)",
+                ).ask()
+            )
+            if selected == "__custom__":
+                custom = await asyncio.to_thread(
+                    lambda: questionary.text(
+                        "Model string (e.g. openai/gpt-4o, anthropic/claude-sonnet-4-20250514):"
+                    ).ask()
+                )
+                if custom:
+                    selected = custom
+            if selected and selected != "__custom__":
+                config.agent.model = selected
+                save_config(config)
+                from lifeclaw.providers.registry import resolve_provider
+                try:
+                    new_provider, new_model = resolve_provider(config, selected)
+                    agent.provider = new_provider
+                    agent.model = new_model
+                    status.model = new_model
+                    console.print(f"  [{theme.success}]Model → {selected} (live)[/]")
+                except ValueError as e:
+                    console.print(f"  [{theme.error}]{e}[/]")
 
     elif command == "/skills":
         from lifeclaw.skills.manager import SkillsManager

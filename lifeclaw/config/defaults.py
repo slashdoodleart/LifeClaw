@@ -36,9 +36,15 @@ DEFAULT_MCP_SERVERS = {
         "env": {},
         "description": "Up-to-date library documentation and code examples",
     },
+    "playwright": {
+        "command": "npx",
+        "args": ["@playwright/mcp@latest"],
+        "env": {},
+        "description": "Browser automation, testing, and web scraping",
+    },
 }
 
-# Optional MCP servers (require API keys or external services)
+# Optional MCP servers (require API keys, external tools, or services)
 OPTIONAL_MCP_SERVERS = {
     "github": {
         "command": "npx",
@@ -51,27 +57,39 @@ OPTIONAL_MCP_SERVERS = {
         "command": "npx",
         "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
         "env": {},
-        "description": "Browser automation and web scraping",
+        "description": "Headless browser automation and screenshots",
+    },
+    "firebase": {
+        "command": "npx",
+        "args": ["-y", "firebase-tools@latest", "mcp"],
+        "env": {},
+        "description": "Firebase project management and deployment",
+    },
+    "serena": {
+        "command": "uvx",
+        "args": ["--from", "git+https://github.com/oraios/serena", "serena", "start-mcp-server"],
+        "env": {},
+        "description": "AI-powered code understanding and semantic search",
     },
 }
 
-# Tips shown randomly in the terminal (like Claude Code)
+# Tips shown randomly in the terminal
 TIPS = [
     "Tip: Use /mode coder to switch to focused coding mode",
     "Tip: Use /mode researcher for thorough analysis with citations",
     "Tip: Use /research <topic> for autonomous paper generation",
     "Tip: Use /review for PR-style code review of current directory",
-    "Tip: Use /skills to see all 14 built-in skills",
+    "Tip: Use /skills to see all built-in skills",
     "Tip: Use /mcp to see connected MCP servers and their tools",
     "Tip: Use /theme to switch between 5 visual themes",
-    "Tip: Use /model ollama/qwen2.5-coder for local coding model",
+    "Tip: Use /model to switch models with arrow-key picker",
     "Tip: Arrow keys navigate history. Tab for completion.",
     "Tip: Use /skill frontend-design for React/Tailwind/shadcn expertise",
     "Tip: Use /skill debugging for systematic root cause analysis",
     "Tip: Use /skill tdd for test-driven development workflow",
     "Tip: Use /skill research-paper for full research pipeline",
     "Tip: MCP servers auto-install via npx on first use",
-    "Tip: Run lifeclaw setup to import MCP servers from Claude Code",
+    "Tip: Run lifeclaw setup to configure providers and import MCP servers",
     "Tip: Your config lives at ~/.lifeclaw/config.json",
     "Tip: Use /clear to reset conversation context",
     "Tip: Use /save to persist your session",

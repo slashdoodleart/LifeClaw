@@ -9,7 +9,7 @@ from rich.text import Text
 
 from lifeclaw import LOGO
 from lifeclaw.config.defaults import DEFAULT_MCP_SERVERS, OPTIONAL_MCP_SERVERS
-from lifeclaw.config.loader import load_config, merge_claude_mcp, save_config
+from lifeclaw.config.loader import import_external_mcp, load_config, save_config
 from lifeclaw.config.schema import Config, MCPServerConfig, ProviderConfig
 from lifeclaw.providers.ollama import OllamaProvider
 from lifeclaw.themes import ALL_THEMES, get_theme
@@ -24,7 +24,7 @@ async def run_setup() -> Config:
     console.print(Panel(Text(LOGO, style="bold"), title="LifeClaw Setup", border_style="bright_cyan"))
     console.print()
 
-    # ─── 1. Theme (arrow-key select) ───
+    # --- 1. Theme (arrow-key select) ---
     theme_choices = [
         questionary.Choice(f"{t.name} — {t.slug}", value=t.slug)
         for t in ALL_THEMES.values()
@@ -40,7 +40,7 @@ async def run_setup() -> Config:
     if result:
         config.theme = result
 
-    # ─── 2. LLM Provider ───
+    # --- 2. LLM Provider ---
     console.print("\n[bold cyan]Setting up LLM provider...[/]")
     ollama_url = await OllamaProvider.detect()
 
@@ -80,6 +80,8 @@ async def run_setup() -> Config:
             questionary.Choice("OpenRouter (any model)", value="openrouter"),
             questionary.Choice("DeepSeek", value="deepseek"),
             questionary.Choice("Groq (fast inference)", value="groq"),
+            questionary.Choice("Mistral", value="mistral"),
+            questionary.Choice("Gemini", value="gemini"),
             questionary.Choice("Skip for now", value="skip"),
         ]
         provider_answer = await asyncio.to_thread(
@@ -100,10 +102,12 @@ async def run_setup() -> Config:
                     "openrouter": "openrouter/anthropic/claude-sonnet-4-20250514",
                     "deepseek": "deepseek/deepseek-chat",
                     "groq": "groq/llama-3.3-70b-versatile",
+                    "mistral": "mistral/mistral-large-latest",
+                    "gemini": "gemini/gemini-2.0-flash",
                 }
                 config.agent.model = defaults.get(prov, f"{prov}/default")
 
-    # ─── 3. MCP Servers (pre-integrated + Claude Code import) ───
+    # --- 3. MCP Servers ---
     console.print("\n[bold cyan]Setting up MCP servers...[/]")
 
     # Pre-install defaults
@@ -118,12 +122,12 @@ async def run_setup() -> Config:
     for name, srv_data in DEFAULT_MCP_SERVERS.items():
         console.print(f"    [dim]{name}[/] — {srv_data['description']}")
 
-    # Import from Claude Code
-    config = merge_claude_mcp(config)
-    claude_only = set(config.mcp_servers.keys()) - set(DEFAULT_MCP_SERVERS.keys())
-    if claude_only:
-        console.print(f"[green]  ● {len(claude_only)} additional servers from Claude Code[/]")
-        for name in claude_only:
+    # Import from external configs
+    config = import_external_mcp(config)
+    imported = set(config.mcp_servers.keys()) - set(DEFAULT_MCP_SERVERS.keys())
+    if imported:
+        console.print(f"[green]  ● {len(imported)} additional servers imported[/]")
+        for name in imported:
             console.print(f"    [dim]{name}[/]")
 
     # Optional servers
@@ -159,28 +163,28 @@ async def run_setup() -> Config:
                     command=data["command"], args=data["args"], env=env,
                 )
 
-    # ─── 4. Import Claude Code skills ───
+    # --- 4. Import external skills ---
     console.print("\n[bold cyan]Importing skills...[/]")
-    from lifeclaw.config.loader import merge_claude_skills
+    from lifeclaw.config.loader import discover_external_skills
     from lifeclaw.skills.manager import SkillsManager
 
-    cc_skills = merge_claude_skills(config)
+    ext_skills = discover_external_skills()
     mgr = SkillsManager(config.skills_dir)
-    if cc_skills:
-        for skill_data in cc_skills:
+    if ext_skills:
+        for skill_data in ext_skills:
             mgr.install(skill_data)
-        console.print(f"[green]  ● {len(cc_skills)} skills imported from Claude Code plugins[/]")
+        console.print(f"[green]  ● {len(ext_skills)} skills imported from plugins[/]")
 
     total_skills = len(mgr.list_skills())
     console.print(f"[green]  ● {total_skills} total skills available (built-in + imported)[/]")
 
-    # ─── 5. Web UI ───
+    # --- 5. Web UI ---
     enable_web = await asyncio.to_thread(
         questionary.confirm, "Enable web dashboard? (localhost:3120)", default=True
     )
     config.web.enabled = enable_web.ask()
 
-    # ─── Save ───
+    # --- Save ---
     save_config(config)
     theme = get_theme(config.theme)
 

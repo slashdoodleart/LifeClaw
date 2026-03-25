@@ -1,4 +1,4 @@
-"""Claude Code-style streaming output renderer with theme support."""
+"""Streaming output renderer with theme support."""
 
 import time
 from typing import Any
@@ -34,7 +34,7 @@ def make_rich_theme(theme: Theme) -> RichTheme:
 
 
 class StreamRenderer:
-    """Claude Code-style streaming renderer with tool call indicators."""
+    """Streaming renderer with tool call indicators."""
 
     def __init__(self, theme: Theme, console: Console):
         self.theme = theme
@@ -65,7 +65,7 @@ class StreamRenderer:
             self._live.stop()
         if self._buffer.strip():
             self.console.print(Markdown(self._buffer))
-        # Status line like Claude Code
+        # Status line
         elapsed = time.monotonic() - self._start_time if self._start_time else 0
         status_parts = []
         if self._tool_count:
@@ -76,7 +76,7 @@ class StreamRenderer:
 
     def print_tool_call(self, name: str, args: dict):
         self._tool_count += 1
-        # Claude Code style: indented with bullet, tool name highlighted
+        # Indented with bullet, tool name highlighted
         arg_summary = ""
         if "path" in args:
             arg_summary = f" [{self.theme.muted}]{args['path']}[/]"
@@ -96,7 +96,7 @@ class StreamRenderer:
         )
 
     def print_tool_result(self, name: str, result: str, success: bool = True):
-        """Show abbreviated tool result like Claude Code."""
+        """Show abbreviated tool result."""
         lines = result.strip().split("\n")
         if len(lines) > 3:
             preview = "\n".join(lines[:3]) + f"\n  ... +{len(lines) - 3} lines"
@@ -111,7 +111,7 @@ class StreamRenderer:
 
 
 class ThinkingSpinner:
-    """Claude Code-style thinking indicator."""
+    """Thinking indicator with spinner."""
 
     def __init__(self, theme: Theme, console: Console):
         self.theme = theme
@@ -137,7 +137,7 @@ class ThinkingSpinner:
 
 
 class StatusLine:
-    """Persistent status line at bottom of terminal (like Claude Code)."""
+    """Persistent status line at bottom of terminal."""
 
     def __init__(self, theme: Theme, console: Console):
         self.theme = theme

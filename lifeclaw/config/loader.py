@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from lifeclaw.config.schema import Config, get_config_path
+from lifeclaw.config.schema import Config, MCPServerConfig, get_config_path
 
 
 def load_config() -> Config:
@@ -20,68 +20,128 @@ def save_config(config: Config) -> None:
     path.write_text(config.model_dump_json(indent=2))
 
 
-def merge_claude_mcp(config: Config) -> Config:
-    """Import MCP servers from ~/.claude/mcp.json if available.
+def import_external_mcp(config: Config) -> Config:
+    """Import MCP servers from external tool configs if available.
 
-    Imports ALL servers including their environment variables.
-    Sensitive keys (tokens, secrets) are imported but stored locally
-    in ~/.lifeclaw/config.json which should not be committed to git.
+    Checks common config locations for MCP server definitions and
+    imports them into LifeClaw's config. Sensitive keys (tokens, secrets)
+    are stored locally in ~/.lifeclaw/config.json which should not be
+    committed to git.
     """
-    claude_mcp = Path.home() / ".claude" / "mcp.json"
-    if not claude_mcp.exists():
-        return config
+    # Check ~/.claude/mcp.json (common MCP config location)
+    mcp_path = Path.home() / ".claude" / "mcp.json"
+    if mcp_path.exists():
+        try:
+            data = json.loads(mcp_path.read_text())
+            servers = data.get("mcpServers", {})
+            for name, srv in servers.items():
+                if name not in config.mcp_servers:
+                    config.mcp_servers[name] = MCPServerConfig(
+                        command=srv.get("command", ""),
+                        args=srv.get("args", []),
+                        env=srv.get("env", {}),
+                    )
+        except Exception:
+            pass
 
-    data = json.loads(claude_mcp.read_text())
-    servers = data.get("mcpServers", {})
-    from lifeclaw.config.schema import MCPServerConfig
+    # Check plugin cache for MCP definitions
+    plugins_cache = Path.home() / ".claude" / "plugins" / "cache"
+    if plugins_cache.exists():
+        for mcp_file in plugins_cache.rglob(".mcp.json"):
+            try:
+                data = json.loads(mcp_file.read_text())
+                # Handle both formats: {"name": {...}} and {"mcpServers": {"name": {...}}}
+                servers = data.get("mcpServers", data)
+                for name, srv in servers.items():
+                    if name == "mcpServers":
+                        continue
+                    if name not in config.mcp_servers and isinstance(srv, dict):
+                        srv_type = srv.get("type", "stdio")
+                        if srv_type == "stdio":
+                            config.mcp_servers[name] = MCPServerConfig(
+                                command=srv.get("command", ""),
+                                args=srv.get("args", []),
+                                env=srv.get("env", {}),
+                            )
+                        # HTTP-based MCP servers stored for reference but need
+                        # different handling (future enhancement)
+            except Exception:
+                pass
 
-    for name, srv in servers.items():
-        if name not in config.mcp_servers:
-            config.mcp_servers[name] = MCPServerConfig(
-                command=srv.get("command", ""),
-                args=srv.get("args", []),
-                env=srv.get("env", {}),
-            )
     return config
 
 
-def merge_claude_skills(config: Config) -> list[dict]:
-    """Discover skills from Claude Code plugins directory.
+def discover_external_skills() -> list[dict]:
+    """Discover skill definitions from external plugin directories.
 
-    Returns a list of skill definitions that can be registered with SkillsManager.
+    Looks for SKILL.md files in plugin caches. Each SKILL.md defines a skill
+    with optional frontmatter (name, description). The skill name is derived
+    from the parent directory name.
+
+    Returns a list of skill dicts that can be registered with SkillsManager.
     """
     skills = []
+    seen_names: set[str] = set()
     plugins_dir = Path.home() / ".claude" / "plugins"
 
     if not plugins_dir.exists():
         return skills
 
-    # Scan for skill files in plugin cache
     cache_dir = plugins_dir / "cache"
-    if cache_dir.exists():
-        for skill_file in cache_dir.rglob("*.md"):
-            if "skills" in str(skill_file) and skill_file.stem not in ("README", "CHANGELOG"):
-                try:
-                    content = skill_file.read_text(errors="replace")
-                    # Extract name from frontmatter or filename
-                    name = skill_file.stem
-                    desc = ""
-                    for line in content.split("\n")[:10]:
-                        if line.startswith("description:"):
-                            desc = line.split(":", 1)[1].strip()
-                            break
-                    if not desc:
-                        desc = f"Imported skill: {name}"
+    if not cache_dir.exists():
+        return skills
 
-                    skills.append({
-                        "name": f"cc-{name}",
-                        "description": desc,
-                        "system_prompt": content[:2000],
-                        "tools": ["read_file", "write_file", "run_command", "search_files", "search_content"],
-                        "category": "claude-code",
-                        "version": "1.0.0",
-                    })
-                except Exception:
-                    pass
+    # Find all SKILL.md files — these are the canonical skill definitions
+    for skill_file in cache_dir.rglob("SKILL.md"):
+        try:
+            content = skill_file.read_text(errors="replace")
+            # Skill name from parent directory (e.g., .../skills/debugging/SKILL.md -> debugging)
+            name = skill_file.parent.name
+
+            # Skip duplicates
+            if name in seen_names:
+                continue
+            seen_names.add(name)
+
+            # Parse frontmatter for description
+            desc = ""
+            in_frontmatter = False
+            for line in content.split("\n")[:20]:
+                if line.strip() == "---":
+                    in_frontmatter = not in_frontmatter
+                    continue
+                if in_frontmatter:
+                    if line.startswith("description:"):
+                        desc = line.split(":", 1)[1].strip().strip('"').strip("'")
+                    elif line.startswith("name:"):
+                        parsed_name = line.split(":", 1)[1].strip().strip('"').strip("'")
+                        if parsed_name:
+                            # Update name but check for duplicates
+                            if parsed_name in seen_names:
+                                continue
+                            seen_names.discard(name)
+                            name = parsed_name
+                            seen_names.add(name)
+
+            if not desc:
+                # Try first non-frontmatter line as description
+                for line in content.split("\n"):
+                    line = line.strip()
+                    if line and not line.startswith("---") and not line.startswith("#"):
+                        desc = line[:120]
+                        break
+                if not desc:
+                    desc = f"Imported skill: {name}"
+
+            skills.append({
+                "name": name,
+                "description": desc,
+                "system_prompt": content[:3000],
+                "tools": ["read_file", "write_file", "run_command", "search_files", "search_content"],
+                "category": "imported",
+                "version": "1.0.0",
+            })
+        except Exception:
+            pass
 
     return skills

@@ -48,7 +48,7 @@ BUILTIN_SKILLS: list[Skill] = [
         name="researcher",
         description="Research and analyze information from files, web, and academic sources",
         system_prompt=(
-            "You are a research assistant with access to AutoResearchClaw-style methodology. "
+            "You are a research assistant with deep analytical methodology. "
             "Analyze files, codebases, and information to provide comprehensive answers. "
             "Be thorough and cite sources. For academic research:\n"
             "- Search arXiv, Semantic Scholar, OpenAlex for papers\n"
@@ -84,12 +84,12 @@ BUILTIN_SKILLS: list[Skill] = [
         tools=["run_command", "read_file", "search_content"],
         category="development",
     ),
-    # === AutoResearchClaw-Inspired Skills ===
+    # === Research Skills ===
     Skill(
         name="research-paper",
-        description="Autonomous research pipeline - from idea to paper draft (AutoResearchClaw-inspired)",
+        description="Autonomous research pipeline - from idea to paper draft",
         system_prompt=(
-            "You are an autonomous research agent inspired by AutoResearchClaw. "
+            "You are an autonomous research agent with a multi-stage pipeline. "
             "Given a research topic, you execute a multi-stage pipeline:\n\n"
             "STAGE 1 - IDEATION: Refine the topic into a specific research question.\n"
             "STAGE 2 - LITERATURE: Search for relevant papers using web tools. "
@@ -122,7 +122,7 @@ BUILTIN_SKILLS: list[Skill] = [
         tools=["run_command", "write_file", "read_file", "search_content"],
         category="research",
     ),
-    # === Claude Code Plugin Skills (pre-integrated) ===
+    # === Development Skills ===
     Skill(
         name="frontend-design",
         description="Create production-grade frontend interfaces with high design quality (shadcn, Tailwind, React)",

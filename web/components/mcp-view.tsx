@@ -1,4 +1,3 @@
-"use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,7 +23,7 @@ export function MCPView({ servers }: MCPViewProps) {
             <Server className="w-12 h-12 mx-auto text-lc-muted mb-3" />
             <p className="text-lc-muted">No MCP servers configured</p>
             <p className="text-xs text-lc-muted mt-1">
-              Run <code className="bg-lc-surface px-1.5 py-0.5 rounded text-lc-accent">lifeclaw setup</code> to import from Claude Code
+              Run <code className="bg-lc-surface px-1.5 py-0.5 rounded text-lc-accent">lifeclaw setup</code> to configure MCP servers
             </p>
           </CardContent>
         </Card>

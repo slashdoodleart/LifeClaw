@@ -1,4 +1,3 @@
-"use client";
 
 import { themes, type ThemeColors } from "@/lib/themes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
