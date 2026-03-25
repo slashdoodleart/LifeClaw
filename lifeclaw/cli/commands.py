@@ -335,6 +335,36 @@ async def _chat_async(
                 break
 
             # Handle slash commands
+            if user_input == "/":
+                # Arrow-key command picker
+                import questionary
+                cmd_choices = [
+                    questionary.Choice("mode — Switch mode (coder, general, researcher, shell)", value="/mode"),
+                    questionary.Choice("model — Switch model (arrow-key Ollama picker)", value="/model"),
+                    questionary.Choice("theme — Switch theme", value="/theme"),
+                    questionary.Choice("skill — Activate a skill", value="/skill"),
+                    questionary.Choice("skills — List all skills", value="/skills"),
+                    questionary.Choice("mcp — Show MCP servers and tools", value="/mcp"),
+                    questionary.Choice("research — Start research pipeline", value="/research"),
+                    questionary.Choice("review — Code review current directory", value="/review"),
+                    questionary.Choice("status — Current status", value="/status"),
+                    questionary.Choice("clear — Clear conversation", value="/clear"),
+                    questionary.Choice("save — Save session", value="/save"),
+                    questionary.Choice("help — Show all commands", value="/help"),
+                    questionary.Choice("(cancel)", value="__cancel__"),
+                ]
+                selected = await asyncio.to_thread(
+                    lambda: questionary.select(
+                        "Command:",
+                        choices=cmd_choices,
+                        instruction="(↑↓ arrow keys, Enter to select, Esc to cancel)",
+                    ).ask()
+                )
+                if selected and selected != "__cancel__":
+                    user_input = selected
+                else:
+                    continue
+
             if user_input.startswith("/"):
                 result = await _handle_command(
                     user_input, config, console, theme, memory, agent,
