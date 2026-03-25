@@ -346,24 +346,33 @@ async def _chat_async(
     history_file = get_config_dir() / "history"
     kb = KeyBindings()
 
-    @kb.add("escape", "escape")  # Double-ESC opens command picker (avoids intercepting arrow key escape sequences)
-    def _escape(event):
-        """Double-ESC opens the command picker."""
+    @kb.add("escape", "/")  # Esc then / opens command picker
+    def _esc_slash(event):
         event.app.current_buffer.text = "/"
         event.app.current_buffer.validate_and_handle()
 
-    @kb.add("c-k")  # Ctrl+K = model switch
-    def _ctrl_k(event):
+    @kb.add("escape", "m")  # Esc+M = mode switch
+    def _esc_m(event):
+        event.app.current_buffer.text = "/mode"
+        event.app.current_buffer.validate_and_handle()
+
+    @kb.add("escape", "k")  # Esc+K = model switch
+    def _esc_k(event):
         event.app.current_buffer.text = "/model"
         event.app.current_buffer.validate_and_handle()
 
-    @kb.add("c-t")  # Ctrl+T = theme switch
-    def _ctrl_t(event):
+    @kb.add("escape", "t")  # Esc+T = theme switch
+    def _esc_t(event):
         event.app.current_buffer.text = "/theme"
         event.app.current_buffer.validate_and_handle()
 
-    @kb.add("c-x")  # Ctrl+X = clear conversation
-    def _ctrl_x(event):
+    @kb.add("escape", "s")  # Esc+S = skill picker
+    def _esc_s(event):
+        event.app.current_buffer.text = "/skill"
+        event.app.current_buffer.validate_and_handle()
+
+    @kb.add("escape", "x")  # Esc+X = clear
+    def _esc_x(event):
         event.app.current_buffer.text = "/clear"
         event.app.current_buffer.validate_and_handle()
 
@@ -402,10 +411,10 @@ async def _chat_async(
                 from lifeclaw.skills.manager import SkillsManager
 
                 cmd_choices = [
-                    questionary.Separator("── Navigation ──"),
-                    questionary.Choice("mode — Switch mode", value="/mode"),
-                    questionary.Choice("model — Switch model (Ctrl+K)", value="/model"),
-                    questionary.Choice("theme — Switch theme (Ctrl+T)", value="/theme"),
+                    questionary.Separator("── Navigation (Esc+key) ──"),
+                    questionary.Choice("mode — Switch mode (Esc M)", value="/mode"),
+                    questionary.Choice("model — Switch model (Esc K)", value="/model"),
+                    questionary.Choice("theme — Switch theme (Esc T)", value="/theme"),
                     questionary.Separator("── Agent ──"),
                     questionary.Choice("research — 23-stage autonomous paper pipeline", value="/research"),
                     questionary.Choice("review — PR-style code review", value="/review"),
@@ -418,18 +427,16 @@ async def _chat_async(
                 mgr = SkillsManager(config.skills_dir)
                 skill_list = mgr.list_skills()
                 if skill_list:
-                    cmd_choices.append(questionary.Separator("── Skills (60+) ──"))
-                    # Group by category
-                    categories = {}
-                    for s in skill_list:
-                        categories.setdefault(s.category, []).append(s)
-                    for cat, cat_skills in sorted(categories.items()):
-                        for s in cat_skills[:5]:  # Show top 5 per category to keep picker manageable
-                            cmd_choices.append(
-                                questionary.Choice(f"{s.name} — {s.description}", value=f"/skill {s.name}")
-                            )
-                    if len(skill_list) > 30:
-                        cmd_choices.append(questionary.Choice("... view all skills", value="/skills"))
+                    cmd_choices.append(questionary.Separator("── Quick Skills ──"))
+                    # Show top skills by category as compact names
+                    top_skills = ["coder", "researcher", "shell", "debugging", "tdd",
+                                  "docx", "xlsx", "pptx", "pdf", "web-research",
+                                  "autonomous-research", "frontend-design", "code-review"]
+                    for sname in top_skills:
+                        s = mgr.get(sname)
+                        if s:
+                            cmd_choices.append(questionary.Choice(sname, value=f"/skill {sname}"))
+                    cmd_choices.append(questionary.Choice("... browse all 60+ skills →", value="/skill"))
 
                 cmd_choices.append(questionary.Separator("── Services ──"))
                 cmd_choices.extend([
@@ -440,7 +447,7 @@ async def _chat_async(
                 cmd_choices.append(questionary.Separator("── Session ──"))
                 cmd_choices.extend([
                     questionary.Choice("status — Current status", value="/status"),
-                    questionary.Choice("clear — Clear conversation (Ctrl+X)", value="/clear"),
+                    questionary.Choice("clear — Clear conversation (Esc X)", value="/clear"),
                     questionary.Choice("save — Save session", value="/save"),
                     questionary.Choice("help — All commands & shortcuts", value="/help"),
                     questionary.Choice("(cancel)", value="__cancel__"),
@@ -546,14 +553,15 @@ async def _handle_command(
         table.add_row("/save", "Save session")
         table.add_row("/status", "Current status")
         table.add_row("", "")
-        table.add_row("[bold]Shortcuts[/]", "")
-        table.add_row("Esc Esc", "Open command picker (double-press)")
-        table.add_row("Ctrl+K", "Switch model")
-        table.add_row("Ctrl+T", "Switch theme")
-        table.add_row("Ctrl+X", "Clear conversation")
+        table.add_row("[bold]Shortcuts (Esc+key)[/]", "")
+        table.add_row("Esc /", "Open command picker")
+        table.add_row("Esc M", "Switch mode")
+        table.add_row("Esc K", "Switch model")
+        table.add_row("Esc T", "Switch theme")
+        table.add_row("Esc S", "Skill picker")
+        table.add_row("Esc X", "Clear conversation")
         table.add_row("Ctrl+C", "Cancel / Exit")
         table.add_row("↑↓", "Navigate history / menus")
-        table.add_row("Tab", "Completion")
         console.print(table)
 
     elif command == "/mode":
@@ -680,7 +688,7 @@ async def _handle_command(
             else:
                 console.print(f"  [{theme.error}]Skill not found: {arg}[/]")
         else:
-            # Arrow-key interactive skill selector grouped by category
+            # Arrow-key interactive skill selector — compact names grouped by category
             import questionary
             all_skills = mgr.list_skills()
             categories = {}
@@ -688,16 +696,15 @@ async def _handle_command(
                 categories.setdefault(s.category, []).append(s)
             skill_choices = []
             for cat in sorted(categories.keys()):
-                skill_choices.append(questionary.Separator(f"── {cat.title()} ──"))
+                skill_choices.append(questionary.Separator(f"── {cat} ──"))
                 for s in categories[cat]:
-                    skill_choices.append(
-                        questionary.Choice(f"{s.name} — {s.description}", value=s.name)
-                    )
+                    # Short name only — keeps the list scannable
+                    skill_choices.append(questionary.Choice(s.name, value=s.name))
             selected = await asyncio.to_thread(
                 lambda: questionary.select(
-                    f"Select skill ({len(all_skills)} available):",
+                    f"Skill ({len(all_skills)} available):",
                     choices=skill_choices,
-                    instruction="(↑↓ to navigate, Enter to select)",
+                    instruction="(↑↓ navigate, Enter select)",
                 ).ask()
             )
             if selected:
