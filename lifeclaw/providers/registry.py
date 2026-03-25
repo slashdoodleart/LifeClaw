@@ -65,7 +65,11 @@ def resolve_provider(config: Config, model_override: str | None = None) -> tuple
     providers_cfg = config.providers
     if provider_name == "ollama":
         base = providers_cfg.ollama.api_base or "http://localhost:11434"
-        return OllamaProvider(base_url=base), model_str
+        provider = OllamaProvider(base_url=base)
+        # Handle "auto" model — will be resolved at chat startup
+        if model_str == "auto":
+            model_str = "auto"
+        return provider, model_str
 
     if provider_name == "anthropic":
         key = providers_cfg.anthropic.api_key

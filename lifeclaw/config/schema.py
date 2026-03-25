@@ -40,7 +40,7 @@ class ProvidersConfig(BaseModel):
 
 
 class AgentConfig(BaseModel):
-    model: str = "ollama/llama3.2"
+    model: str = "ollama/auto"
     provider: str = "auto"
     max_tokens: int = 8192
     context_window: int = 65536

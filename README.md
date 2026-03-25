@@ -30,14 +30,12 @@ Most AI assistants force a choice: terminal or GUI, coding or general tasks, loc
 
 > **Requires Python 3.11+.** On macOS, the system Python is 3.9 — install a newer version via `brew install python@3.11` or [python.org](https://python.org).
 
-### npm (recommended — auto-installs Python package)
+### npm (recommended — auto-handles Python)
 
 ```bash
-npx lifeclaw setup    # One command, handles everything
-npx lifeclaw chat     # Start chatting
-
-# Or install globally
-npm install -g lifeclaw
+# Install globally from GitHub (auto-finds Python 3.11+, installs deps)
+npm install -g github:slashdoodleart/LifeClaw
+lifeclaw setup
 lifeclaw chat
 ```
 

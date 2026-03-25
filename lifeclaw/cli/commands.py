@@ -120,21 +120,48 @@ async def _chat_async(
     console = Console(theme=make_rich_theme(theme))
     current_mode = initial_mode if initial_mode in MODES else "general"
 
-    # Welcome banner with theme-colored box
     import random
     from lifeclaw.config.defaults import TIPS
 
-    console.print()
+    # Initialize provider (auto-detect Ollama model if needed)
+    from lifeclaw.providers.registry import resolve_provider
+    try:
+        provider, model_name = resolve_provider(config, model_override)
+    except ValueError as e:
+        console.print(f"  [{theme.error}]{e}[/]")
+        console.print(f"  [{theme.muted}]Run 'lifeclaw setup' to configure a provider.[/]")
+        return
 
-    # Build the welcome panel content
-    model_display = model_override or config.agent.model
+    # If using Ollama, auto-detect model if needed and verify it exists
+    from lifeclaw.providers.ollama import OllamaProvider
+    if isinstance(provider, OllamaProvider):
+        try:
+            available = await provider.list_models()
+            if available:
+                if model_name == "auto" or model_name not in available:
+                    if model_name != "auto":
+                        console.print(f"  [{theme.warning}]Model '{model_name}' not found in Ollama[/]")
+                    model_name = available[0]
+                    console.print(f"  [{theme.success}]Auto-selected: {model_name}[/] [{theme.muted}]({len(available)} models available, use /model to switch)[/]")
+            elif model_name == "auto":
+                console.print(f"  [{theme.warning}]No models in Ollama. Run: ollama pull qwen3.5:4b[/]")
+                return
+        except Exception as e:
+            if model_name == "auto":
+                console.print(f"  [{theme.error}]Could not connect to Ollama: {e}[/]")
+                console.print(f"  [{theme.muted}]Start Ollama or run 'lifeclaw setup' to configure a cloud provider.[/]")
+                return
+
+    # Welcome banner
+    console.print()
     mcp_count = len(config.mcp_servers)
+    model_display = model_name
 
     left_col = Text()
     left_col.append("\n", style="")
     left_col.append("  LifeClaw", style=f"bold {theme.primary}")
     left_col.append(f" v{__version__}\n", style=f"{theme.muted}")
-    left_col.append(f"\n  [{theme.muted}]", style="")
+    left_col.append(f"\n", style="")
     left_col.append(f"  {model_display}", style=f"{theme.accent}")
     left_col.append(f"  ·  ", style=f"{theme.muted}")
     left_col.append(f"{current_mode}", style=f"bold {theme.secondary}")
@@ -146,12 +173,6 @@ async def _chat_async(
     left_col.append("\n", style="")
 
     tip = random.choice(TIPS)
-    right_text = (
-        f"[{theme.accent}]Tips[/]\n"
-        f"[{theme.muted}]{tip}[/]\n"
-        f"[{theme.muted}]/help for commands · /mode to switch · exit to quit[/]"
-    )
-
     console.print(Panel(
         left_col,
         title=f"[{theme.primary} bold]LifeClaw[/]",
@@ -159,16 +180,6 @@ async def _chat_async(
         border_style=theme.primary,
         padding=(0, 1),
     ))
-    console.print()
-
-    # Initialize provider
-    from lifeclaw.providers.registry import resolve_provider
-    try:
-        provider, model_name = resolve_provider(config, model_override)
-    except ValueError as e:
-        console.print(f"  [{theme.error}]{e}[/]")
-        console.print(f"  [{theme.muted}]Run 'lifeclaw setup' to configure a provider.[/]")
-        return
 
     # Initialize MCP
     from lifeclaw.mcp.client import MCPClient
