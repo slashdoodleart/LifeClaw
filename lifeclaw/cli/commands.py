@@ -31,10 +31,89 @@ from lifeclaw.themes import ALL_THEMES, get_theme
 app = typer.Typer(
     name="lifeclaw",
     help="LifeClaw — Hybrid AI Assistant for Terminal & Web",
-    no_args_is_help=True,
+    no_args_is_help=False,
+    invoke_without_command=True,
 )
 
 EXIT_COMMANDS = {"exit", "quit", "/exit", "/quit", ":q", "bye"}
+
+
+@app.callback(invoke_without_command=True)
+def main(ctx: typer.Context):
+    """LifeClaw — launch the interactive menu or a subcommand."""
+    if ctx.invoked_subcommand is not None:
+        return
+    # No subcommand — show interactive arrow-key main menu
+    asyncio.run(_interactive_menu())
+
+
+async def _interactive_menu():
+    import questionary
+    from lifeclaw.themes import get_theme
+
+    config = load_config()
+    theme = get_theme(config.theme)
+    console = Console(theme=make_rich_theme(theme))
+
+    console.print()
+    logo = Text(LOGO, style=f"bold {theme.primary}")
+    console.print(logo)
+    console.print(f"  [{theme.muted}]v{__version__}[/]")
+    console.print()
+
+    while True:
+        action = await asyncio.to_thread(
+            lambda: questionary.select(
+                "What would you like to do?",
+                choices=[
+                    questionary.Choice("Chat — Start a conversation", value="chat"),
+                    questionary.Choice("Chat (Coder) — Coding assistant mode", value="coder"),
+                    questionary.Choice("Chat (Researcher) — Research & analysis mode", value="researcher"),
+                    questionary.Choice("Chat (Shell) — System administration mode", value="shell"),
+                    questionary.Choice("Setup — Configure providers, MCP, theme", value="setup"),
+                    questionary.Choice("Themes — Browse and switch themes", value="themes"),
+                    questionary.Choice("Skills — View available skills", value="skills"),
+                    questionary.Choice("Web Dashboard — Launch browser UI", value="web"),
+                    questionary.Choice("Exit", value="exit"),
+                ],
+                instruction="(↑↓ arrow keys, Enter to select, Ctrl+C to quit)",
+            ).ask()
+        )
+
+        if action is None or action == "exit":
+            console.print(f"  [{theme.muted}]Goodbye![/]\n")
+            break
+        elif action == "chat":
+            await _chat_async(None, None, "general", False)
+            break
+        elif action == "coder":
+            await _chat_async(None, None, "coder", False)
+            break
+        elif action == "researcher":
+            await _chat_async(None, None, "researcher", False)
+            break
+        elif action == "shell":
+            await _chat_async(None, None, "shell", False)
+            break
+        elif action == "setup":
+            from lifeclaw.config.setup import run_setup
+            await run_setup()
+            # After setup, refresh config and loop back to menu
+            config = load_config()
+        elif action == "themes":
+            for t in ALL_THEMES.values():
+                active = " ●" if t.slug == config.theme else "  "
+                console.print(f"  {active} [{t.primary}]{t.name}[/] ({t.slug})")
+            console.print()
+        elif action == "skills":
+            from lifeclaw.skills.manager import SkillsManager
+            mgr = SkillsManager(config.skills_dir)
+            for s in mgr.list_skills():
+                console.print(f"  [{theme.accent}]{s.name}[/] [{theme.muted}]({s.category}) — {s.description}[/]")
+            console.print()
+        elif action == "web":
+            await _web_async()
+            break
 
 # Mode definitions — each mode shapes agent behavior
 MODES = {
