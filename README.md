@@ -1,67 +1,60 @@
 <div align="center">
   <img src="assets/logo.png" alt="LifeClaw" width="200">
   <h1>LifeClaw</h1>
-  <p><strong>The hybrid AI assistant that lives in your terminal and your browser.</strong></p>
+  <p><strong>The hybrid AI assistant that lives in your terminal, your browser, and your chat apps.</strong></p>
   <p>
     <img src="https://img.shields.io/badge/python-%E2%89%A53.11-blue" alt="Python">
     <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
     <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey" alt="Platform">
+    <img src="https://img.shields.io/badge/skills-60%2B-orange" alt="Skills">
+    <img src="https://img.shields.io/badge/providers-17-purple" alt="Providers">
   </p>
 </div>
 
 ---
 
-LifeClaw is a unified AI assistant that combines the precision of a code editor with the versatility of a general-purpose agent. It runs as a terminal CLI, a web dashboard, or both simultaneously — connected to local models via Ollama, cloud providers, or any OpenAI-compatible endpoint.
+LifeClaw is a unified AI assistant that combines a surgical code editor, autonomous researcher, document creator, and multi-channel messaging bot — all in one CLI. It runs as a terminal app, a web dashboard, or a gateway service connected to Telegram, Discord, Slack, and more.
 
-A single binary handles everything from surgical code edits to autonomous research, writing, system administration, and task automation.
+One tool. Every task. Local-first. 60+ built-in skills. 17 LLM providers. Zero config web search. Autonomous 23-stage research pipeline. Document creation (DOCX, XLSX, PPTX, PDF). Scheduled tasks. Arrow-key navigation everywhere.
 
 ## Why LifeClaw
 
-Most AI assistants force a choice: terminal or GUI, coding or general tasks, local or cloud. LifeClaw refuses to choose.
-
-- **One CLI, every use case.** `lifeclaw chat` gives you a coding assistant, a shell expert, a researcher, and a writer — all behind the same prompt.
-- **Local-first.** Auto-detects Ollama during setup. Your data stays on your machine unless you choose otherwise.
-- **MCP native.** Connects to Model Context Protocol servers for filesystem, memory, web search, GitHub, browser automation, and anything else you wire up.
-- **Themeable.** Five built-in themes for terminal and web. Aurora (default) blends light orange, purple, and blue for comfortable extended sessions.
-- **Dual interface.** The terminal CLI and web dashboard share the same agent brain, running simultaneously via WebSocket.
-- **Every provider.** Ollama, OpenAI, Anthropic, Gemini, OpenRouter, DeepSeek, Groq, Mistral, Moonshot, Zhipu, DashScope, MiniMax, SiliconFlow, Volcengine, Azure OpenAI, vLLM, and any custom endpoint.
+- **One CLI, every use case.** Coding, research, writing, documents, shell ops, web search, channel bots — all behind one prompt
+- **Local-first.** Auto-detects Ollama. Your data stays on your machine unless you choose otherwise
+- **Gateway mode.** Run LifeClaw as a service — connect Telegram, Discord, Slack bots with cron scheduling
+- **60+ built-in skills.** From TDD to PDF creation to autonomous research papers
+- **Autonomous research.** 23-stage pipeline turns an idea into a conference-ready paper with real literature, experiments, and peer review
+- **Document creation.** Create Word docs, spreadsheets, presentations, and PDFs natively
+- **Web search built-in.** DuckDuckGo (zero config), Brave, Tavily, Jina, SearXNG — with automatic fallback
+- **MCP native.** 9 pre-integrated MCP servers, auto-import from existing configs
+- **Every provider.** 17 providers: Ollama, OpenAI, Anthropic, Gemini, OpenRouter, DeepSeek, Groq, Mistral, and more
+- **Arrow-key navigation.** No commands to memorize — just arrow keys and Enter for everything
+- **Dual interface.** Terminal CLI and web dashboard share the same agent brain via WebSocket
 
 ## Quick Start
 
-> **Requires Python 3.11+.** On macOS, the system Python is 3.9 — install a newer version via `brew install python@3.11` or [python.org](https://python.org).
+> **Requires Python 3.11+.** On macOS, install via `brew install python@3.11` or [python.org](https://python.org).
 
-### npm (recommended — auto-handles Python)
-
-```bash
-# Install globally from GitHub (auto-finds Python 3.11+, installs deps)
-npm install -g github:slashdoodleart/LifeClaw
-lifeclaw setup
-lifeclaw chat
-```
-
-### pip
+### pip (recommended)
 
 ```bash
 pip3.11 install git+https://github.com/slashdoodleart/LifeClaw.git
-lifeclaw setup
-lifeclaw chat
+lifeclaw         # Arrow-key interactive menu
 ```
 
-### Shell script
+### npm (auto-handles Python)
 
 ```bash
-# macOS / Linux / WSL (auto-finds Homebrew Python)
-curl -fsSL https://raw.githubusercontent.com/slashdoodleart/LifeClaw/main/install.sh | bash
-
-# Windows (PowerShell)
-irm https://raw.githubusercontent.com/slashdoodleart/LifeClaw/main/install.ps1 | iex
+npm install -g github:slashdoodleart/LifeClaw
+lifeclaw setup
+lifeclaw chat
 ```
 
 ### Docker
 
 ```bash
 docker build -t lifeclaw https://github.com/slashdoodleart/LifeClaw.git
-docker run -it --network host -v ~/.lifeclaw:/root/.lifeclaw lifeclaw chat
+docker run -it --network host -v ~/.lifeclaw:/root/.lifeclaw lifeclaw
 ```
 
 ### From source
@@ -70,175 +63,242 @@ docker run -it --network host -v ~/.lifeclaw:/root/.lifeclaw lifeclaw chat
 git clone https://github.com/slashdoodleart/LifeClaw.git
 cd LifeClaw
 python3.11 -m pip install -e .
-lifeclaw setup && lifeclaw chat
+lifeclaw
 ```
 
 ## Features
 
 ### Terminal UI
-Rich, themed terminal interface with streaming output, markdown rendering, syntax highlighting, and persistent history.
+Rich, themed terminal with streaming output, markdown, syntax highlighting, and arrow-key navigation.
 
-```
-lifeclaw chat                      # Start interactive session
-lifeclaw chat -c                   # Coder mode (shortcut)
-lifeclaw chat --model ollama/qwen2.5-coder  # Use a specific model
-lifeclaw chat --theme midnight     # Override theme
-lifeclaw web                       # Start web dashboard only
-lifeclaw setup                     # Interactive setup wizard
+```bash
+lifeclaw                          # Interactive arrow-key main menu
+lifeclaw chat                     # Start chat session
+lifeclaw chat -c                  # Coder mode (auto-accepts edits)
+lifeclaw chat --mode researcher   # Research mode
+lifeclaw gateway                  # Run as service with channels & cron
+lifeclaw research "your topic"    # 23-stage autonomous research pipeline
+lifeclaw setup                    # Interactive setup wizard
+lifeclaw channels                 # View messaging integrations
+lifeclaw cron                     # View scheduled tasks
+lifeclaw web                      # Web dashboard only
 ```
 
 ### Slash Commands
 | Command | Description |
 |---------|-------------|
-| `/help` | Show all commands |
-| `/mode` | Switch mode with arrow-key picker (coder, general, researcher, shell) |
-| `/model` | Switch model — live Ollama model picker + custom entry |
+| `/` | Arrow-key command picker (all commands + skills inline) |
+| `/mode` | Switch mode (coder, general, researcher, shell) |
+| `/model` | Switch model — live Ollama picker + custom entry |
 | `/theme` | Switch theme with arrow-key picker |
-| `/skill` | Activate a skill (coder, debugging, tdd, frontend-design, ...) |
-| `/skills` | List all available skills |
+| `/skill` | Activate a skill with arrow-key picker |
+| `/skills` | List all 60+ available skills |
 | `/mcp` | List connected MCP servers and tools |
-| `/research <topic>` | Start autonomous 7-stage research pipeline |
+| `/research <topic>` | Start autonomous 23-stage research pipeline |
 | `/review` | PR-style code review of current directory |
 | `/clear` | Clear conversation |
 | `/save` | Save session |
-| `/status` | Show current status |
+| `/status` | Current status |
 
-### Web Dashboard
-A local Vite + React + shadcn dashboard at `localhost:3120` that mirrors the terminal experience:
-- **Chat** — Same agent, browser-based with markdown rendering
-- **Themes** — Visual theme switcher with live preview
-- **Skills** — Browse and manage available skills
-- **MCP** — Monitor connected MCP servers
-- **Settings** — View and manage configuration
+### Multi-Channel Messaging (Gateway Mode)
+
+Connect LifeClaw to your favorite chat platforms. Run `lifeclaw gateway` to start.
+
+| Channel | What you need |
+|---------|---------------|
+| **Telegram** | Bot token from @BotFather |
+| **Discord** | Bot token + Message Content intent |
+| **Slack** | Bot token + App-level token (Socket Mode) |
+| **WebChat** | Built-in, just enable |
+
+Configure in `~/.lifeclaw/config.json`:
+```json
+{
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "token": "YOUR_BOT_TOKEN",
+      "allowFrom": ["*"]
+    }
+  }
+}
+```
+
+### Cron / Scheduled Tasks
+
+Create recurring agent tasks that run on schedule:
+
+```json
+// ~/.lifeclaw/cron/jobs.json
+[
+  {
+    "id": "abc123",
+    "name": "daily-standup",
+    "prompt": "Generate a standup summary from recent git commits",
+    "schedule": "daily",
+    "enabled": true
+  }
+]
+```
+
+Schedules: `5m`, `1h`, `30s`, `daily`, `hourly`, `weekly`
+
+### Autonomous Research Pipeline
+
+Full 23-stage pipeline from idea to conference-ready paper:
+
+```bash
+lifeclaw research "transformer attention for long documents"
+```
+
+Stages: topic refinement → hypotheses → literature search → gap analysis → methodology → experiments → code generation → execution → statistical analysis → visualization → paper writing (7 sections) → peer review → final revision
+
+Output: `paper_draft.md`, `experiments/`, `charts/`, `references.bib` — all in `./research_output/`
+
+### Document Creation
+
+Create professional documents natively:
+
+| Skill | Format | Capabilities |
+|-------|--------|-------------|
+| `docx` | Word (.docx) | Reports, letters, proposals, formatting, tables |
+| `xlsx` | Excel (.xlsx) | Data, formulas, charts, formatting |
+| `pptx` | PowerPoint (.pptx) | Slides, layouts, charts, speaker notes |
+| `pdf` | PDF (.pdf) | Reports, forms, merge, split, watermarks |
+
+### Web Search
+
+Built-in multi-provider web search with automatic fallback:
+
+| Provider | Config | Free |
+|----------|--------|------|
+| **DuckDuckGo** (default) | Zero config | Yes |
+| **Brave** | API key | No |
+| **Tavily** | API key | No |
+| **Jina** | API key | Free tier |
+| **SearXNG** | Self-hosted URL | Yes |
+
+The agent can search the web and fetch pages using `web_search` and `web_fetch` tools — no setup required.
 
 ### Providers
-| Provider | Models | Type |
-|----------|--------|------|
-| **Ollama** | llama3.2, qwen2.5-coder, mistral, deepseek-coder, phi, gemma, codellama, any | Local |
-| **vLLM** | Any model via vLLM server | Local |
-| **OpenAI** | gpt-4o, gpt-4o-mini, o1, o3 | Cloud |
-| **Anthropic** | claude-opus, claude-sonnet, claude-haiku | Cloud |
-| **Gemini** | gemini-2.0-flash, gemini-1.5-pro | Cloud |
-| **OpenRouter** | Any model on OpenRouter | Cloud |
-| **DeepSeek** | deepseek-chat, deepseek-coder | Cloud |
-| **Groq** | llama-3.3-70b, mixtral, gemma2 | Cloud |
-| **Mistral** | mistral-large, codestral, mistral-small | Cloud |
-| **Moonshot** | moonshot-v1-8k, moonshot-v1-32k | Cloud |
-| **Zhipu** | glm-4, glm-4-plus | Cloud |
-| **DashScope** | qwen-turbo, qwen-max, qwen-plus | Cloud |
-| **MiniMax** | abab6.5, abab5.5 | Cloud |
-| **SiliconFlow** | Various open-source models | Cloud |
-| **Volcengine** | Doubao models | Cloud |
-| **Azure OpenAI** | Any Azure-deployed model | Cloud |
-| **Custom** | Any OpenAI-compatible endpoint | Any |
 
-Model strings use `provider/model` format: `ollama/llama3.2`, `anthropic/claude-sonnet-4-20250514`, `openai/gpt-4o`.
+| Provider | Type | Models |
+|----------|------|--------|
+| **Ollama** | Local | llama3, qwen2.5-coder, mistral, phi, gemma, any |
+| **vLLM** | Local | Any model via vLLM server |
+| **OpenAI** | Cloud | gpt-4o, gpt-4o-mini, o1, o3 |
+| **Anthropic** | Cloud | claude-opus, claude-sonnet, claude-haiku |
+| **Gemini** | Cloud | gemini-2.0-flash, gemini-1.5-pro |
+| **OpenRouter** | Cloud | Any model on OpenRouter |
+| **DeepSeek** | Cloud | deepseek-chat, deepseek-coder |
+| **Groq** | Cloud | llama-3.3-70b, mixtral, gemma2 |
+| **Mistral** | Cloud | mistral-large, codestral |
+| **Moonshot** | Cloud | moonshot-v1 |
+| **Zhipu** | Cloud | glm-4, glm-4-plus |
+| **DashScope** | Cloud | qwen-turbo, qwen-max |
+| **MiniMax** | Cloud | abab6.5, abab5.5 |
+| **SiliconFlow** | Cloud | Various open-source |
+| **Volcengine** | Cloud | Doubao models |
+| **Azure OpenAI** | Cloud | Any Azure-deployed model |
+| **Custom** | Any | Any OpenAI-compatible endpoint |
+
+Model format: `provider/model` — e.g., `ollama/qwen2.5-coder`, `anthropic/claude-sonnet-4-20250514`
 
 ### MCP Integration
-LifeClaw natively speaks the Model Context Protocol. Pre-integrated servers:
 
-- `filesystem` — File operations (read, write, search, move)
-- `memory` — Persistent knowledge graph memory
-- `fetch` — Web page fetching and conversion
+9 pre-integrated MCP servers (auto-install via npx on first use):
+
+- `filesystem` — File operations
+- `memory` — Persistent knowledge graph
+- `fetch` — Web page fetching
 - `sequential-thinking` — Chain-of-thought reasoning
-- `context7` — Up-to-date library documentation
-- `playwright` — Browser automation and testing
-- `github` — GitHub operations (optional, needs PAT)
-- `puppeteer` — Headless browser (optional)
-- Any custom MCP server
+- `context7` — Library documentation
+- `playwright` — Browser automation
+- `figma` — Design integration
+- `brave-search` — Web search
+- `everything` — Reference/testing server
 
-During setup, LifeClaw also imports MCP servers from your existing tool configurations.
+Optional: `github`, `puppeteer`, `firebase`, `serena`
 
-### Skills
-Skills shape the agent's behavior for specific tasks:
+Also auto-imports MCP servers from your existing tool configurations.
 
-| Skill | Category | Description |
-|-------|----------|-------------|
-| `coder` | development | Expert coding — reads, writes, debugs, refactors |
-| `shell` | system | System administration and automation |
-| `researcher` | research | Deep analysis of files, codebases, and information |
-| `writer` | writing | Technical documentation and content |
-| `git-expert` | development | Git workflows, commits, branches, merge conflicts |
-| `research-paper` | research | Autonomous 7-stage research pipeline |
-| `literature-review` | research | Systematic literature review |
-| `frontend-design` | development | React/Tailwind/shadcn interfaces |
-| `code-review` | development | Comprehensive code review |
-| `pr-review` | development | Pull request review |
-| `debugging` | development | Systematic root cause analysis |
-| `tdd` | development | Test-driven development |
-| `mcp-builder` | development | Create MCP servers |
-| `webapp-testing` | testing | Playwright web testing |
-| `feature-dev` | development | Guided feature development |
+### Skills (60+)
 
-Custom skills can be added as JSON files in `~/.lifeclaw/skills/`.
+| Category | Skills |
+|----------|--------|
+| **Development** | coder, shell, git-expert, frontend-design, code-review, pr-review, debugging, tdd, mcp-builder, webapp-testing, feature-dev, changelog-generator, git-worktree |
+| **Research** | researcher, research-paper, literature-review, autonomous-research, web-research |
+| **Documents** | docx, xlsx, pptx, pdf, doc-coauthoring |
+| **Writing** | writer, content-research-writer, internal-comms |
+| **Business** | business-analyst, prd, domain-name-brainstormer, lead-research-assistant, meeting-insights-analyzer, market-analysis |
+| **Content** | seo, twitter-algorithm-optimizer, competitive-ads-extractor |
+| **Creative** | playground, canvas-design, algorithmic-art, theme-factory, slack-gif-creator |
+| **Utility** | file-organizer, invoice-organizer, image-enhancer, video-downloader, raffle-winner-picker |
+| **Professional** | tailored-resume-generator |
+| **Workflow** | systematic-debugging, test-driven-development, brainstorming, writing-plans, executing-plans, parallel-tasks, verification, smart-explore, make-plan |
+| **Automation** | cron-tasks, channel-setup, daily-routine, knowledge-assistant |
+| **Meta** | skill-creator |
+
+Custom skills: drop JSON files in `~/.lifeclaw/skills/`.
 
 ### Themes
 
 | Theme | Palette | Vibe |
 |-------|---------|------|
-| **Aurora** (default) | Light orange + Light purple + Light blue | Warm, comfortable, Nordic |
-| **Midnight** | Purple + Cyan + Rose | Dark, neon, focused |
-| **Forest** | Green + Violet + Gold | Earthy, calm, natural |
-| **Ocean** | Cyan + Indigo + Orange | Deep, cool, expansive |
-| **Monochrome** | White + Gray + White | Clean, minimal, distraction-free |
-
-Themes apply to both terminal and web dashboard simultaneously.
+| **Aurora** (default) | Orange + Purple + Blue | Warm, Nordic |
+| **Midnight** | Purple + Cyan + Rose | Dark, neon |
+| **Forest** | Green + Violet + Gold | Earthy, calm |
+| **Ocean** | Cyan + Indigo + Orange | Cool, expansive |
+| **Monochrome** | White + Gray | Minimal |
 
 ## Architecture
 
 ```
 lifeclaw/
-├── agent/          # Agent loop, memory, built-in tools
-├── providers/      # LLM providers (Ollama, OpenAI, Anthropic, 15+ more)
+├── agent/          # Agent loop, memory, built-in tools (file, shell, web, docs)
+├── providers/      # 17 LLM providers (Ollama, OpenAI, Anthropic, Gemini, ...)
 ├── mcp/            # MCP client (connects to any MCP server)
-├── skills/         # 15 built-in skills + custom skill loader
-├── cli/            # Terminal UI (Rich + prompt-toolkit)
+├── skills/         # 60+ built-in skills + custom skill loader
+├── channels/       # Multi-channel messaging (Telegram, Discord, Slack, WebChat)
+├── gateway/        # Gateway server (channels + cron + agent as service)
+├── cron/           # Scheduled task execution
+├── websearch/      # Multi-provider web search (Brave, DDG, Jina, Tavily, SearXNG)
+├── research/       # 23-stage autonomous research pipeline
+├── cli/            # Terminal UI (Rich + prompt-toolkit + questionary)
 ├── config/         # Configuration, setup wizard, loader
 ├── server/         # WebSocket bridge to web dashboard
-└── themes/         # 5 built-in themes (terminal + web)
+└── themes/         # 5 built-in themes
 web/                # Vite + React + shadcn web dashboard
 ```
 
-The Python backend runs the agent brain, provider connections, MCP client, and WebSocket server. The web frontend connects via WebSocket to provide a browser-based interface. Both interfaces share the same agent state.
-
 ## Configuration
 
-Configuration lives at `~/.lifeclaw/config.json`. Run `lifeclaw setup` for the interactive wizard, or edit directly:
+Config lives at `~/.lifeclaw/config.json`. Run `lifeclaw setup` for the interactive wizard.
 
 ```json
 {
   "theme": "aurora",
   "agent": {
-    "model": "ollama/llama3.2",
+    "model": "ollama/auto",
     "provider": "auto",
     "max_tokens": 8192,
     "temperature": 0.1
   },
   "providers": {
     "ollama": { "api_base": "http://localhost:11434" },
-    "openai": { "api_key": "sk-..." },
-    "anthropic": { "api_key": "sk-ant-..." }
+    "openai": { "api_key": "sk-..." }
   },
-  "mcp_servers": {
-    "filesystem": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/user"]
-    }
+  "channels": {
+    "telegram": { "enabled": true, "token": "BOT_TOKEN" },
+    "discord": { "enabled": false, "token": "" }
+  },
+  "web_search": {
+    "provider": "duckduckgo",
+    "max_results": 5
   },
   "web": { "enabled": true, "port": 3119 }
 }
 ```
-
-## Web Dashboard Setup
-
-```bash
-cd web
-npm install
-npm run dev     # Development mode at localhost:3120
-npm run build   # Production build
-```
-
-The web dashboard connects to the Python backend's WebSocket server (port 3119 by default). Start the backend first with `lifeclaw chat` or `lifeclaw web`.
 
 ## Requirements
 

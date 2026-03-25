@@ -60,12 +60,36 @@ class WebConfig(BaseModel):
     port: int = 3119
 
 
+class WebSearchConfig(BaseModel):
+    provider: str = "duckduckgo"  # brave, tavily, jina, searxng, duckduckgo
+    api_key: str = ""
+    base_url: str = ""  # For SearXNG
+    max_results: int = 5
+    proxy: str = ""
+
+
+class ChannelConfig(BaseModel):
+    enabled: bool = False
+    token: str = ""
+    bot_token: str = ""
+    app_token: str = ""
+    allow_from: list[str] = Field(default_factory=lambda: ["*"])
+
+
+class GatewayConfig(BaseModel):
+    port: int = 18790
+    workspace: str = "~/.lifeclaw/workspace"
+
+
 class Config(BaseModel):
     theme: str = "aurora"
     agent: AgentConfig = Field(default_factory=AgentConfig)
     providers: ProvidersConfig = Field(default_factory=ProvidersConfig)
     mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
     web: WebConfig = Field(default_factory=WebConfig)
+    web_search: WebSearchConfig = Field(default_factory=WebSearchConfig)
+    channels: dict[str, dict] = Field(default_factory=dict)
+    gateway: GatewayConfig = Field(default_factory=GatewayConfig)
     skills_dir: str = "~/.lifeclaw/skills"
 
 

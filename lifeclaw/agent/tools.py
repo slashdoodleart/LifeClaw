@@ -11,6 +11,51 @@ TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
+            "name": "web_search",
+            "description": "Search the web for information. Returns titles, URLs, and snippets.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query"},
+                    "max_results": {"type": "integer", "description": "Max results (default 5)"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_fetch",
+            "description": "Fetch a web page and return its content as text/markdown.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "URL to fetch"},
+                },
+                "required": ["url"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_document",
+            "description": "Create a document file (docx, xlsx, pptx, pdf). Write a Python script using the appropriate library and execute it.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "doc_type": {"type": "string", "enum": ["docx", "xlsx", "pptx", "pdf"], "description": "Document type"},
+                    "script": {"type": "string", "description": "Python script that creates the document using python-docx/openpyxl/python-pptx/reportlab"},
+                    "output_path": {"type": "string", "description": "Where to save the output file"},
+                },
+                "required": ["doc_type", "script", "output_path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "read_file",
             "description": "Read the contents of a file at the given path.",
             "parameters": {
@@ -123,6 +168,12 @@ async def execute_tool(name: str, arguments: dict[str, Any]) -> str:
             return await _search_content(**arguments)
         elif name == "list_directory":
             return _list_directory(**arguments)
+        elif name == "web_search":
+            return await _web_search(**arguments)
+        elif name == "web_fetch":
+            return await _web_fetch(**arguments)
+        elif name == "create_document":
+            return await _create_document(**arguments)
         else:
             return f"Unknown tool: {name}"
     except Exception as e:
@@ -204,3 +255,42 @@ def _list_directory(path: str) -> str:
         kind = "dir" if e.is_dir() else "file"
         lines.append(f"[{kind}] {e.name}")
     return "\n".join(lines) or "(empty directory)"
+
+
+async def _web_search(query: str, max_results: int = 5) -> str:
+    from lifeclaw.websearch.search import WebSearchProvider
+    searcher = WebSearchProvider()
+    results = await searcher.search(query, max_results)
+    if not results:
+        return "No results found."
+    lines = []
+    for i, r in enumerate(results, 1):
+        lines.append(f"{i}. [{r.title}]({r.url})\n   {r.snippet}")
+    return "\n\n".join(lines)
+
+
+async def _web_fetch(url: str) -> str:
+    from lifeclaw.websearch.search import WebSearchProvider
+    searcher = WebSearchProvider()
+    return await searcher.fetch_page(url)
+
+
+async def _create_document(doc_type: str, script: str, output_path: str) -> str:
+    """Execute a Python script to create a document. Sandboxed to doc creation libraries."""
+    import tempfile
+    p = Path(output_path).expanduser().resolve()
+    p.parent.mkdir(parents=True, exist_ok=True)
+
+    # Write script to temp file and execute
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+        f.write(script)
+        script_path = f.name
+
+    try:
+        result = await _run_command(f"python3 {script_path}", timeout=120)
+        if p.exists():
+            size = p.stat().st_size
+            return f"Document created: {p} ({size} bytes)\n{result}"
+        return f"Script ran but output not found at {p}.\n{result}"
+    finally:
+        Path(script_path).unlink(missing_ok=True)

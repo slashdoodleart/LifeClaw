@@ -42,6 +42,24 @@ DEFAULT_MCP_SERVERS = {
         "env": {},
         "description": "Browser automation, testing, and web scraping",
     },
+    "figma": {
+        "command": "npx",
+        "args": ["-y", "figma-mcp-bridge"],
+        "env": {},
+        "description": "Figma design integration — inspect, export, bridge designs to code",
+    },
+    "brave-search": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+        "env": {},
+        "description": "Web search via Brave Search API",
+    },
+    "everything": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-everything"],
+        "env": {},
+        "description": "Reference MCP server with all tool types for testing",
+    },
 }
 
 # Optional MCP servers (require API keys, external tools, or services)
@@ -95,4 +113,13 @@ TIPS = [
     "Tip: Use /save to persist your session",
     "Tip: The web dashboard runs at localhost:3120 alongside the terminal",
     "Tip: Press Ctrl+C to cancel a running operation",
+    "Tip: Use lifeclaw gateway to run as a service with channels & cron",
+    "Tip: Use lifeclaw research 'your topic' for autonomous paper generation",
+    "Tip: Connect Telegram, Discord, Slack via channels config",
+    "Tip: Set up cron jobs for recurring agent tasks",
+    "Tip: Web search works out of the box with DuckDuckGo (zero config)",
+    "Tip: Use /skill docx to create Word documents",
+    "Tip: Use /skill pptx to create presentations",
+    "Tip: Use /skill xlsx to create spreadsheets",
+    "Tip: 60+ built-in skills covering coding, research, documents, and more",
 ]

@@ -17,6 +17,27 @@ from lifeclaw.themes import ALL_THEMES, get_theme
 console = Console()
 
 
+def _ask_select(message: str, choices, **kwargs):
+    """Run questionary.select synchronously (safe for asyncio.to_thread)."""
+    return questionary.select(message, choices=choices, **kwargs).ask()
+
+
+def _ask_checkbox(message: str, choices, **kwargs):
+    return questionary.checkbox(message, choices=choices, **kwargs).ask()
+
+
+def _ask_text(message: str):
+    return questionary.text(message).ask()
+
+
+def _ask_password(message: str):
+    return questionary.password(message).ask()
+
+
+def _ask_confirm(message: str, default=True):
+    return questionary.confirm(message, default=default).ask()
+
+
 async def run_setup() -> Config:
     config = load_config()
 
@@ -29,14 +50,13 @@ async def run_setup() -> Config:
         questionary.Choice(f"{t.name} — {t.slug}", value=t.slug)
         for t in ALL_THEMES.values()
     ]
-    theme_answer = await asyncio.to_thread(
-        questionary.select,
+    result = await asyncio.to_thread(
+        _ask_select,
         "Choose your theme (arrow keys to navigate):",
-        choices=theme_choices,
+        theme_choices,
         default="aurora",
         instruction="(Use arrow keys)",
     )
-    result = theme_answer.ask()
     if result:
         config.theme = result
 
@@ -55,21 +75,19 @@ async def run_setup() -> Config:
                 console.print(f"[green]  ● {len(models)} models available[/]")
                 model_choices = [questionary.Choice(m, value=m) for m in models[:20]]
                 model_choices.append(questionary.Choice("(enter custom)", value="__custom__"))
-                model_answer = await asyncio.to_thread(
-                    questionary.select,
+                model_result = await asyncio.to_thread(
+                    _ask_select,
                     "Select default model:",
-                    choices=model_choices,
+                    model_choices,
                     instruction="(Use arrow keys)",
                 )
-                model_result = model_answer.ask()
                 if model_result == "__custom__":
-                    custom = await asyncio.to_thread(questionary.text, "Enter model name:")
-                    model_result = custom.ask()
+                    model_result = await asyncio.to_thread(_ask_text, "Enter model name:")
                 if model_result and model_result != "__custom__":
                     config.agent.model = f"ollama/{model_result}"
                     config.agent.provider = "ollama"
             else:
-                console.print("[yellow]  No models found. Run: ollama pull llama3.2[/]")
+                console.print("[yellow]  No models found. Run: ollama pull qwen3.5:4b[/]")
         except Exception as e:
             console.print(f"[yellow]  Could not list models: {e}[/]")
     else:
@@ -84,14 +102,12 @@ async def run_setup() -> Config:
             questionary.Choice("Gemini", value="gemini"),
             questionary.Choice("Skip for now", value="skip"),
         ]
-        provider_answer = await asyncio.to_thread(
-            questionary.select, "Choose cloud provider:", choices=provider_choices,
+        prov = await asyncio.to_thread(
+            _ask_select, "Choose cloud provider:", provider_choices,
             instruction="(Use arrow keys)",
         )
-        prov = provider_answer.ask()
         if prov and prov != "skip":
-            key_input = await asyncio.to_thread(questionary.password, f"Enter {prov} API key:")
-            key = key_input.ask()
+            key = await asyncio.to_thread(_ask_password, f"Enter {prov} API key:")
             if key:
                 prov_cfg: ProviderConfig = getattr(config.providers, prov)
                 prov_cfg.api_key = key
@@ -140,23 +156,19 @@ async def run_setup() -> Config:
         for name, data in OPTIONAL_MCP_SERVERS.items()
     ]
     if optional_choices:
-        opt_answer = await asyncio.to_thread(
-            questionary.checkbox,
+        selected = await asyncio.to_thread(
+            _ask_checkbox,
             "Enable optional MCP servers? (space to toggle, enter to confirm):",
-            choices=optional_choices,
+            optional_choices,
             instruction="(Space to select, Enter to confirm)",
-        )
-        selected = opt_answer.ask() or []
+        ) or []
         for name in selected:
             if name not in config.mcp_servers:
                 data = OPTIONAL_MCP_SERVERS[name]
                 env = data.get("env", {})
                 requires = data.get("requires")
                 if requires and not env.get(requires):
-                    key_input = await asyncio.to_thread(
-                        questionary.password, f"Enter {requires}:"
-                    )
-                    key = key_input.ask()
+                    key = await asyncio.to_thread(_ask_password, f"Enter {requires}:")
                     if key:
                         env[requires] = key
                 config.mcp_servers[name] = MCPServerConfig(
@@ -179,10 +191,9 @@ async def run_setup() -> Config:
     console.print(f"[green]  ● {total_skills} total skills available (built-in + imported)[/]")
 
     # --- 5. Web UI ---
-    enable_web = await asyncio.to_thread(
-        questionary.confirm, "Enable web dashboard? (localhost:3120)", default=True
+    config.web.enabled = await asyncio.to_thread(
+        _ask_confirm, "Enable web dashboard? (localhost:3120)", True
     )
-    config.web.enabled = enable_web.ask()
 
     # --- Save ---
     save_config(config)

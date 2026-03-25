@@ -70,6 +70,12 @@ async def _interactive_menu():
                     questionary.Choice("Chat (Coder) — Coding assistant mode", value="coder"),
                     questionary.Choice("Chat (Researcher) — Research & analysis mode", value="researcher"),
                     questionary.Choice("Chat (Shell) — System administration mode", value="shell"),
+                    questionary.Separator("── Services ──"),
+                    questionary.Choice("Gateway — Run as service with channels & cron", value="gateway"),
+                    questionary.Choice("Research — Autonomous 23-stage paper pipeline", value="research"),
+                    questionary.Choice("Channels — View messaging integrations", value="channels"),
+                    questionary.Choice("Cron — Scheduled tasks", value="cron"),
+                    questionary.Separator("── Config ──"),
                     questionary.Choice("Setup — Configure providers, MCP, theme", value="setup"),
                     questionary.Choice("Themes — Browse and switch themes", value="themes"),
                     questionary.Choice("Skills — View available skills", value="skills"),
@@ -110,6 +116,36 @@ async def _interactive_menu():
             mgr = SkillsManager(config.skills_dir)
             for s in mgr.list_skills():
                 console.print(f"  [{theme.accent}]{s.name}[/] [{theme.muted}]({s.category}) — {s.description}[/]")
+            console.print()
+        elif action == "gateway":
+            await _gateway_async()
+            break
+        elif action == "research":
+            import questionary as q2
+            topic_input = await asyncio.to_thread(
+                lambda: q2.text("Research topic:").ask()
+            )
+            if topic_input:
+                await _research_async(topic_input)
+            break
+        elif action == "channels":
+            from lifeclaw.channels.registry import _register_channels, CHANNEL_CLASSES
+            _register_channels()
+            for name in CHANNEL_CLASSES:
+                ch_cfg = config.channels.get(name, {})
+                enabled = ch_cfg.get("enabled", False)
+                status_str = f"[{theme.success}]enabled[/]" if enabled else f"[{theme.muted}]disabled[/]"
+                console.print(f"  {name:<15} {status_str}")
+            console.print()
+        elif action == "cron":
+            from lifeclaw.cron.scheduler import CronScheduler
+            scheduler = CronScheduler()
+            jobs = scheduler.list_jobs()
+            if not jobs:
+                console.print(f"  [{theme.muted}]No cron jobs configured.[/]\n")
+            else:
+                for job in jobs:
+                    console.print(f"  [{theme.accent}]{job.name}[/] ({job.schedule})")
             console.print()
         elif action == "web":
             await _web_async()
@@ -306,9 +342,32 @@ async def _chat_async(
 
     console.print()
 
-    # Prompt session
+    # Prompt session with key bindings
     history_file = get_config_dir() / "history"
-    session = PromptSession(history=FileHistory(str(history_file)))
+    kb = KeyBindings()
+
+    @kb.add("escape", "escape")  # Double-ESC opens command picker (avoids intercepting arrow key escape sequences)
+    def _escape(event):
+        """Double-ESC opens the command picker."""
+        event.app.current_buffer.text = "/"
+        event.app.current_buffer.validate_and_handle()
+
+    @kb.add("c-k")  # Ctrl+K = model switch
+    def _ctrl_k(event):
+        event.app.current_buffer.text = "/model"
+        event.app.current_buffer.validate_and_handle()
+
+    @kb.add("c-t")  # Ctrl+T = theme switch
+    def _ctrl_t(event):
+        event.app.current_buffer.text = "/theme"
+        event.app.current_buffer.validate_and_handle()
+
+    @kb.add("c-x")  # Ctrl+X = clear conversation
+    def _ctrl_x(event):
+        event.app.current_buffer.text = "/clear"
+        event.app.current_buffer.validate_and_handle()
+
+    session = PromptSession(history=FileHistory(str(history_file)), key_bindings=kb)
 
     try:
         while True:
@@ -343,30 +402,47 @@ async def _chat_async(
                 from lifeclaw.skills.manager import SkillsManager
 
                 cmd_choices = [
-                    questionary.Choice("mode — Switch mode (coder, general, researcher, shell)", value="/mode"),
-                    questionary.Choice("model — Switch model (arrow-key Ollama picker)", value="/model"),
-                    questionary.Choice("theme — Switch theme", value="/theme"),
+                    questionary.Separator("── Navigation ──"),
+                    questionary.Choice("mode — Switch mode", value="/mode"),
+                    questionary.Choice("model — Switch model (Ctrl+K)", value="/model"),
+                    questionary.Choice("theme — Switch theme (Ctrl+T)", value="/theme"),
+                    questionary.Separator("── Agent ──"),
+                    questionary.Choice("research — 23-stage autonomous paper pipeline", value="/research"),
+                    questionary.Choice("review — PR-style code review", value="/review"),
+                    questionary.Choice("spawn — Run a sub-agent for parallel tasks", value="/spawn"),
+                    questionary.Choice("learn — View MetaClaw learned lessons", value="/learn"),
+                    questionary.Choice("websearch — Search the web", value="/websearch"),
                 ]
 
                 # Add skills directly in the picker
                 mgr = SkillsManager(config.skills_dir)
                 skill_list = mgr.list_skills()
                 if skill_list:
-                    cmd_choices.append(questionary.Separator("── Skills ──"))
+                    cmd_choices.append(questionary.Separator("── Skills (60+) ──"))
+                    # Group by category
+                    categories = {}
                     for s in skill_list:
-                        cmd_choices.append(
-                            questionary.Choice(f"{s.name} — {s.description}", value=f"/skill {s.name}")
-                        )
+                        categories.setdefault(s.category, []).append(s)
+                    for cat, cat_skills in sorted(categories.items()):
+                        for s in cat_skills[:5]:  # Show top 5 per category to keep picker manageable
+                            cmd_choices.append(
+                                questionary.Choice(f"{s.name} — {s.description}", value=f"/skill {s.name}")
+                            )
+                    if len(skill_list) > 30:
+                        cmd_choices.append(questionary.Choice("... view all skills", value="/skills"))
 
-                cmd_choices.append(questionary.Separator("── Other ──"))
+                cmd_choices.append(questionary.Separator("── Services ──"))
                 cmd_choices.extend([
-                    questionary.Choice("mcp — Show MCP servers and tools", value="/mcp"),
-                    questionary.Choice("research — Start research pipeline", value="/research"),
-                    questionary.Choice("review — Code review current directory", value="/review"),
+                    questionary.Choice("mcp — MCP servers and tools", value="/mcp"),
+                    questionary.Choice("channels — Messaging integrations", value="/channels"),
+                    questionary.Choice("cron — Scheduled tasks", value="/cron"),
+                ])
+                cmd_choices.append(questionary.Separator("── Session ──"))
+                cmd_choices.extend([
                     questionary.Choice("status — Current status", value="/status"),
-                    questionary.Choice("clear — Clear conversation", value="/clear"),
+                    questionary.Choice("clear — Clear conversation (Ctrl+X)", value="/clear"),
                     questionary.Choice("save — Save session", value="/save"),
-                    questionary.Choice("help — Show all commands", value="/help"),
+                    questionary.Choice("help — All commands & shortcuts", value="/help"),
                     questionary.Choice("(cancel)", value="__cancel__"),
                 ])
                 selected = await asyncio.to_thread(
@@ -449,21 +525,35 @@ async def _handle_command(
 
     if command == "/help":
         table = Table(border_style=theme.muted, show_header=False, padding=(0, 2))
-        table.add_column(style=f"{theme.accent}")
+        table.add_column(style=f"{theme.accent}", min_width=20)
         table.add_column()
-        table.add_row("/help", "Show this help")
+        table.add_row("[bold]Commands[/]", "")
+        table.add_row("/", "Open command picker (or press Esc)")
         table.add_row("/mode [name]", "Switch mode (coder, general, researcher, shell)")
-        table.add_row("/model [name]", "Switch model (e.g. ollama/llama3.2)")
-        table.add_row("/theme [name]", "Switch theme (aurora, midnight, forest, ocean, monochrome)")
-        table.add_row("/skills", "List available skills")
-        table.add_row("/skill [name]", "Activate a skill")
-        table.add_row("/mcp", "List MCP servers and tools")
-        table.add_row("/research [topic]", "Start autonomous research pipeline on a topic")
-        table.add_row("/review", "Review code in current directory (PR-style)")
+        table.add_row("/model [name]", "Switch model with live picker")
+        table.add_row("/theme [name]", "Switch theme")
+        table.add_row("/skill [name]", "Activate a skill (60+ available)")
+        table.add_row("/skills", "List all available skills")
+        table.add_row("/research [topic]", "23-stage autonomous research pipeline")
+        table.add_row("/review", "PR-style code review of current directory")
+        table.add_row("/mcp", "MCP servers and tools")
+        table.add_row("/spawn [task]", "Run a sub-agent in parallel")
+        table.add_row("/learn", "View MetaClaw learned lessons")
+        table.add_row("/websearch [query]", "Search the web")
+        table.add_row("/channels", "View messaging integrations")
+        table.add_row("/cron", "View scheduled tasks")
         table.add_row("/clear", "Clear conversation")
         table.add_row("/save", "Save session")
-        table.add_row("/status", "Show current status")
-        table.add_row("exit", "Quit")
+        table.add_row("/status", "Current status")
+        table.add_row("", "")
+        table.add_row("[bold]Shortcuts[/]", "")
+        table.add_row("Esc Esc", "Open command picker (double-press)")
+        table.add_row("Ctrl+K", "Switch model")
+        table.add_row("Ctrl+T", "Switch theme")
+        table.add_row("Ctrl+X", "Clear conversation")
+        table.add_row("Ctrl+C", "Cancel / Exit")
+        table.add_row("↑↓", "Navigate history / menus")
+        table.add_row("Tab", "Completion")
         console.print(table)
 
     elif command == "/mode":
@@ -590,18 +680,22 @@ async def _handle_command(
             else:
                 console.print(f"  [{theme.error}]Skill not found: {arg}[/]")
         else:
-            # Arrow-key interactive skill selector
+            # Arrow-key interactive skill selector grouped by category
             import questionary
-            skill_choices = [
-                questionary.Choice(
-                    f"{s.name} ({s.category}) — {s.description}",
-                    value=s.name,
-                )
-                for s in mgr.list_skills()
-            ]
+            all_skills = mgr.list_skills()
+            categories = {}
+            for s in all_skills:
+                categories.setdefault(s.category, []).append(s)
+            skill_choices = []
+            for cat in sorted(categories.keys()):
+                skill_choices.append(questionary.Separator(f"── {cat.title()} ──"))
+                for s in categories[cat]:
+                    skill_choices.append(
+                        questionary.Choice(f"{s.name} — {s.description}", value=s.name)
+                    )
             selected = await asyncio.to_thread(
                 lambda: questionary.select(
-                    "Select skill (arrow keys):",
+                    f"Select skill ({len(all_skills)} available):",
                     choices=skill_choices,
                     instruction="(↑↓ to navigate, Enter to select)",
                 ).ask()
@@ -667,6 +761,85 @@ async def _handle_command(
         memory.add_user(review_prompt)
         console.print(f"  [{theme.info}]Starting code review...[/]\n")
 
+    elif command == "/spawn":
+        if not arg:
+            import questionary
+            arg = await asyncio.to_thread(
+                lambda: questionary.text("Task for sub-agent:").ask()
+            )
+        if arg:
+            console.print(f"  [{theme.info}]Spawning sub-agent...[/]")
+            from lifeclaw.agent.subagent import SubAgentManager, SubAgentTask
+            # Create a lightweight sub-agent (shares provider, fresh memory)
+            from lifeclaw.agent.loop import AgentLoop
+            from lifeclaw.agent.memory import Memory as FreshMemory
+            def _make_agent():
+                return AgentLoop(
+                    provider=agent.provider, model=agent.model,
+                    memory=FreshMemory(),
+                    max_iterations=agent.max_iterations,
+                    temperature=agent.temperature,
+                    max_tokens=agent.max_tokens,
+                    mcp_tools=agent.mcp_tools,
+                    mcp_executor=agent.mcp_executor,
+                )
+            mgr = SubAgentManager(_make_agent)
+            task = mgr.spawn("user-task", arg)
+            result = await mgr.execute(task.id)
+            from rich.markdown import Markdown as RichMarkdown
+            console.print(RichMarkdown(result))
+
+    elif command == "/learn":
+        from lifeclaw.agent.metaclaw import MetaClawBridge
+        mc = MetaClawBridge()
+        lessons = mc.lessons
+        if not lessons:
+            console.print(f"  [{theme.muted}]No lessons learned yet. Lessons are extracted from research runs and errors.[/]")
+        else:
+            console.print(f"  [bold {theme.primary}]MetaClaw Lessons ({len(lessons)})[/]")
+            for l in lessons[:15]:
+                console.print(f"  [{theme.accent}]{l.category}[/] [{theme.muted}]— {l.trigger}[/]")
+                console.print(f"    {l.content[:100]}")
+            stats = mc.stats()
+            console.print(f"\n  [{theme.muted}]Avg confidence: {stats['avg_confidence']:.2f}, Applied: {stats['total_applications']}x[/]")
+
+    elif command == "/websearch":
+        if not arg:
+            import questionary
+            arg = await asyncio.to_thread(
+                lambda: questionary.text("Search query:").ask()
+            )
+        if arg:
+            console.print(f"  [{theme.info}]Searching...[/]")
+            from lifeclaw.websearch.search import WebSearchProvider
+            searcher = WebSearchProvider()
+            results = await searcher.search(arg)
+            for i, r in enumerate(results, 1):
+                console.print(f"  [{theme.accent}]{i}.[/] [{theme.primary}]{r.title}[/]")
+                console.print(f"    [{theme.muted}]{r.url}[/]")
+                console.print(f"    {r.snippet[:120]}")
+
+    elif command == "/channels":
+        from lifeclaw.channels.registry import _register_channels, CHANNEL_CLASSES
+        _register_channels()
+        console.print(f"\n  [bold {theme.primary}]Messaging Channels[/]\n")
+        for ch_name in CHANNEL_CLASSES:
+            ch_cfg = config.channels.get(ch_name, {})
+            enabled = ch_cfg.get("enabled", False)
+            st = f"[{theme.success}]enabled[/]" if enabled else f"[{theme.muted}]disabled[/]"
+            console.print(f"  {ch_name:<15} {st}")
+        console.print(f"\n  [{theme.muted}]Configure in ~/.lifeclaw/config.json, start with: lifeclaw gateway[/]\n")
+
+    elif command == "/cron":
+        from lifeclaw.cron.scheduler import CronScheduler
+        scheduler = CronScheduler()
+        jobs = scheduler.list_jobs()
+        if not jobs:
+            console.print(f"  [{theme.muted}]No cron jobs. Add to ~/.lifeclaw/cron/jobs.json[/]")
+        else:
+            for job in jobs:
+                console.print(f"  [{theme.accent}]{job.name}[/] ({job.schedule}) — {job.prompt[:60]}")
+
     elif command == "/clear":
         memory.clear()
         console.print(f"  [{theme.success}]Conversation cleared.[/]")
@@ -714,6 +887,99 @@ def skills():
     mgr = SkillsManager(config.skills_dir)
     for s in mgr.list_skills():
         console.print(f"  [{s.name}] ({s.category}) — {s.description}")
+
+
+@app.command()
+def gateway():
+    """Start the gateway server — connects channels, cron, and agent as a service."""
+    asyncio.run(_gateway_async())
+
+
+async def _gateway_async():
+    from lifeclaw.gateway.server import Gateway
+    config = load_config()
+    gw = Gateway(config)
+    await gw.run_forever()
+
+
+@app.command()
+def channels():
+    """List available and active channels."""
+    console = _get_console()
+    config = load_config()
+    theme = get_theme(config.theme)
+    from lifeclaw.channels.registry import _register_channels, CHANNEL_CLASSES
+    _register_channels()
+    console.print(f"\n  [bold {theme.primary}]Available Channels[/]\n")
+    for name in CHANNEL_CLASSES:
+        ch_cfg = config.channels.get(name, {})
+        enabled = ch_cfg.get("enabled", False)
+        status = f"[{theme.success}]enabled[/]" if enabled else f"[{theme.muted}]disabled[/]"
+        console.print(f"  {name:<15} {status}")
+    console.print(f"\n  [{theme.muted}]Configure in ~/.lifeclaw/config.json under 'channels'[/]")
+    console.print(f"  [{theme.muted}]Start with: lifeclaw gateway[/]\n")
+
+
+@app.command()
+def cron():
+    """List and manage scheduled tasks."""
+    console = _get_console()
+    config = load_config()
+    theme = get_theme(config.theme)
+    from lifeclaw.cron.scheduler import CronScheduler
+    scheduler = CronScheduler()
+    jobs = scheduler.list_jobs()
+    if not jobs:
+        console.print(f"\n  [{theme.muted}]No cron jobs configured.[/]")
+        console.print(f"  [{theme.muted}]Use the agent to create cron jobs or add them to ~/.lifeclaw/cron/jobs.json[/]\n")
+        return
+    console.print(f"\n  [bold {theme.primary}]Scheduled Tasks[/]\n")
+    for job in jobs:
+        status = f"[{theme.success}]active[/]" if job.enabled else f"[{theme.muted}]paused[/]"
+        console.print(f"  [{theme.accent}]{job.name}[/] ({job.schedule}) {status}")
+        console.print(f"    [{theme.muted}]{job.prompt[:60]}...[/]")
+        if job.last_run:
+            console.print(f"    [{theme.muted}]Last run: {job.last_run}[/]")
+    console.print()
+
+
+@app.command()
+def research(topic: str = typer.Argument(..., help="Research topic")):
+    """Run the autonomous research pipeline on a topic."""
+    asyncio.run(_research_async(topic))
+
+
+async def _research_async(topic: str):
+    config = load_config()
+    theme = get_theme(config.theme)
+    console = Console(theme=make_rich_theme(theme))
+
+    from lifeclaw.providers.registry import resolve_provider
+    from lifeclaw.agent.loop import AgentLoop
+    from lifeclaw.agent.memory import Memory
+    from lifeclaw.research.pipeline import ResearchPipeline, STAGES
+
+    provider, model_name = resolve_provider(config)
+
+    from lifeclaw.providers.ollama import OllamaProvider
+    if isinstance(provider, OllamaProvider) and model_name == "auto":
+        models = await provider.list_models()
+        model_name = models[0] if models else "auto"
+
+    memory = Memory()
+    agent = AgentLoop(provider=provider, model=model_name, memory=memory)
+
+    console.print(f"\n  [bold {theme.primary}]Research Pipeline[/]")
+    console.print(f"  [{theme.muted}]Topic: {topic}[/]")
+    console.print(f"  [{theme.muted}]Model: {model_name}[/]")
+    console.print(f"  [{theme.muted}]Stages: {len(STAGES)}[/]\n")
+
+    pipeline = ResearchPipeline(agent_fn=agent.process)
+    run = await pipeline.run(topic)
+
+    console.print(f"\n  [{theme.success}]Pipeline {run.status}![/]")
+    console.print(f"  [{theme.muted}]Stages completed: {len(run.stages_completed)}/{len(STAGES)}[/]")
+    console.print(f"  [{theme.muted}]Output: {run.output_dir}[/]\n")
 
 
 @app.command()
