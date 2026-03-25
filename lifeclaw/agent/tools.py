@@ -103,6 +103,11 @@ TOOL_DEFINITIONS = [
 ]
 
 
+# When True, tools like write_file and run_command execute without user confirmation.
+# Set by coder mode at startup.
+auto_accept: bool = False
+
+
 async def execute_tool(name: str, arguments: dict[str, Any]) -> str:
     """Execute a built-in tool and return the result as a string."""
     try:

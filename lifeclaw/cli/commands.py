@@ -312,7 +312,7 @@ async def _chat_async(
 
     try:
         while True:
-            # Mode-aware prompt
+            # Styled input prompt with horizontal rules
             mode_color = {
                 "coder": theme.accent,
                 "general": theme.primary,
@@ -321,10 +321,12 @@ async def _chat_async(
             }.get(current_mode, theme.primary)
 
             try:
+                console.print(Rule(style=theme.muted))
                 user_input = await asyncio.to_thread(
                     session.prompt,
-                    HTML(f'<style fg="{mode_color}" bold="true">{current_mode} &gt; </style>'),
+                    HTML(f'<style fg="{mode_color}" bold="true">\u276f </style>'),
                 )
+                console.print(Rule(style=theme.muted))
             except (EOFError, KeyboardInterrupt):
                 break
 
@@ -336,14 +338,28 @@ async def _chat_async(
 
             # Handle slash commands
             if user_input == "/":
-                # Arrow-key command picker
+                # Arrow-key command picker with skills inline
                 import questionary
+                from lifeclaw.skills.manager import SkillsManager
+
                 cmd_choices = [
                     questionary.Choice("mode — Switch mode (coder, general, researcher, shell)", value="/mode"),
                     questionary.Choice("model — Switch model (arrow-key Ollama picker)", value="/model"),
                     questionary.Choice("theme — Switch theme", value="/theme"),
-                    questionary.Choice("skill — Activate a skill", value="/skill"),
-                    questionary.Choice("skills — List all skills", value="/skills"),
+                ]
+
+                # Add skills directly in the picker
+                mgr = SkillsManager(config.skills_dir)
+                skill_list = mgr.list_skills()
+                if skill_list:
+                    cmd_choices.append(questionary.Separator("── Skills ──"))
+                    for s in skill_list:
+                        cmd_choices.append(
+                            questionary.Choice(f"{s.name} — {s.description}", value=f"/skill {s.name}")
+                        )
+
+                cmd_choices.append(questionary.Separator("── Other ──"))
+                cmd_choices.extend([
                     questionary.Choice("mcp — Show MCP servers and tools", value="/mcp"),
                     questionary.Choice("research — Start research pipeline", value="/research"),
                     questionary.Choice("review — Code review current directory", value="/review"),
@@ -352,12 +368,12 @@ async def _chat_async(
                     questionary.Choice("save — Save session", value="/save"),
                     questionary.Choice("help — Show all commands", value="/help"),
                     questionary.Choice("(cancel)", value="__cancel__"),
-                ]
+                ])
                 selected = await asyncio.to_thread(
                     lambda: questionary.select(
                         "Command:",
                         choices=cmd_choices,
-                        instruction="(↑↓ arrow keys, Enter to select, Esc to cancel)",
+                        instruction="(↑↓ arrow keys, Enter to select)",
                     ).ask()
                 )
                 if selected and selected != "__cancel__":
@@ -415,9 +431,12 @@ async def _chat_async(
 def _apply_mode(agent, mode_name: str):
     """Apply mode-specific system prompt addendum."""
     from lifeclaw.agent.loop import SYSTEM_PROMPT
+    from lifeclaw.agent import tools as agent_tools
     mode = MODES.get(mode_name, MODES["general"])
     full_prompt = SYSTEM_PROMPT + mode["system_addendum"]
     agent.memory.add_system(full_prompt)
+    # Coder mode auto-accepts all tool edits (like a coding IDE)
+    agent_tools.auto_accept = (mode_name == "coder")
 
 
 async def _handle_command(
