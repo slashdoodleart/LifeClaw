@@ -9,7 +9,6 @@ import typer
 from prompt_toolkit import PromptSession
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
-from prompt_toolkit.key_binding import KeyBindings
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -342,41 +341,9 @@ async def _chat_async(
 
     console.print()
 
-    # Prompt session with key bindings
+    # Prompt session — no custom key bindings, just use / commands
     history_file = get_config_dir() / "history"
-    kb = KeyBindings()
-
-    @kb.add("escape", "/")  # Esc then / opens command picker
-    def _esc_slash(event):
-        event.app.current_buffer.text = "/"
-        event.app.current_buffer.validate_and_handle()
-
-    @kb.add("escape", "m")  # Esc+M = mode switch
-    def _esc_m(event):
-        event.app.current_buffer.text = "/mode"
-        event.app.current_buffer.validate_and_handle()
-
-    @kb.add("escape", "k")  # Esc+K = model switch
-    def _esc_k(event):
-        event.app.current_buffer.text = "/model"
-        event.app.current_buffer.validate_and_handle()
-
-    @kb.add("escape", "t")  # Esc+T = theme switch
-    def _esc_t(event):
-        event.app.current_buffer.text = "/theme"
-        event.app.current_buffer.validate_and_handle()
-
-    @kb.add("escape", "s")  # Esc+S = skill picker
-    def _esc_s(event):
-        event.app.current_buffer.text = "/skill"
-        event.app.current_buffer.validate_and_handle()
-
-    @kb.add("escape", "x")  # Esc+X = clear
-    def _esc_x(event):
-        event.app.current_buffer.text = "/clear"
-        event.app.current_buffer.validate_and_handle()
-
-    session = PromptSession(history=FileHistory(str(history_file)), key_bindings=kb)
+    session = PromptSession(history=FileHistory(str(history_file)))
 
     try:
         while True:
@@ -410,46 +377,47 @@ async def _chat_async(
                 import questionary
                 from lifeclaw.skills.manager import SkillsManager
 
+                # Mode-relevant skills — show only what matters for current mode
+                MODE_SKILLS = {
+                    "coder": ["debugging", "tdd", "code-review", "pr-review", "frontend-design",
+                              "mcp-builder", "git-expert", "feature-dev", "changelog-generator"],
+                    "researcher": ["autonomous-research", "web-research", "literature-review",
+                                   "research-paper", "content-research-writer", "seo"],
+                    "shell": ["file-organizer", "cron-tasks", "channel-setup", "daily-routine"],
+                    "general": ["docx", "xlsx", "pptx", "pdf", "business-analyst", "prd",
+                                "tailored-resume-generator", "image-enhancer", "canvas-design"],
+                }
+                relevant_skills = MODE_SKILLS.get(current_mode, MODE_SKILLS["general"])
+
                 cmd_choices = [
-                    questionary.Separator("── Navigation (Esc+key) ──"),
-                    questionary.Choice("mode — Switch mode (Esc M)", value="/mode"),
-                    questionary.Choice("model — Switch model (Esc K)", value="/model"),
-                    questionary.Choice("theme — Switch theme (Esc T)", value="/theme"),
-                    questionary.Separator("── Agent ──"),
-                    questionary.Choice("research — 23-stage autonomous paper pipeline", value="/research"),
-                    questionary.Choice("review — PR-style code review", value="/review"),
-                    questionary.Choice("spawn — Run a sub-agent for parallel tasks", value="/spawn"),
-                    questionary.Choice("learn — View MetaClaw learned lessons", value="/learn"),
-                    questionary.Choice("websearch — Search the web", value="/websearch"),
+                    questionary.Choice("/mode — Switch mode", value="/mode"),
+                    questionary.Choice("/model — Switch model", value="/model"),
+                    questionary.Choice("/theme — Switch theme", value="/theme"),
                 ]
 
-                # Add skills directly in the picker
+                # Show mode-relevant skills
                 mgr = SkillsManager(config.skills_dir)
-                skill_list = mgr.list_skills()
-                if skill_list:
-                    cmd_choices.append(questionary.Separator("── Quick Skills ──"))
-                    # Show top skills by category as compact names
-                    top_skills = ["coder", "researcher", "shell", "debugging", "tdd",
-                                  "docx", "xlsx", "pptx", "pdf", "web-research",
-                                  "autonomous-research", "frontend-design", "code-review"]
-                    for sname in top_skills:
-                        s = mgr.get(sname)
-                        if s:
-                            cmd_choices.append(questionary.Choice(sname, value=f"/skill {sname}"))
-                    cmd_choices.append(questionary.Choice("... browse all 60+ skills →", value="/skill"))
+                cmd_choices.append(questionary.Separator(f"── {current_mode} skills ──"))
+                for sname in relevant_skills:
+                    s = mgr.get(sname)
+                    if s:
+                        cmd_choices.append(questionary.Choice(sname, value=f"/skill {sname}"))
+                cmd_choices.append(questionary.Choice("all skills...", value="/skill"))
 
-                cmd_choices.append(questionary.Separator("── Services ──"))
+                cmd_choices.append(questionary.Separator("── actions ──"))
                 cmd_choices.extend([
-                    questionary.Choice("mcp — MCP servers and tools", value="/mcp"),
-                    questionary.Choice("channels — Messaging integrations", value="/channels"),
-                    questionary.Choice("cron — Scheduled tasks", value="/cron"),
+                    questionary.Choice("/research — Autonomous paper pipeline", value="/research"),
+                    questionary.Choice("/review — Code review", value="/review"),
+                    questionary.Choice("/websearch — Search the web", value="/websearch"),
+                    questionary.Choice("/spawn — Run sub-agent", value="/spawn"),
+                    questionary.Choice("/mcp — MCP servers", value="/mcp"),
                 ])
-                cmd_choices.append(questionary.Separator("── Session ──"))
+                cmd_choices.append(questionary.Separator("── session ──"))
                 cmd_choices.extend([
-                    questionary.Choice("status — Current status", value="/status"),
-                    questionary.Choice("clear — Clear conversation (Esc X)", value="/clear"),
-                    questionary.Choice("save — Save session", value="/save"),
-                    questionary.Choice("help — All commands & shortcuts", value="/help"),
+                    questionary.Choice("/clear", value="/clear"),
+                    questionary.Choice("/save", value="/save"),
+                    questionary.Choice("/status", value="/status"),
+                    questionary.Choice("/help", value="/help"),
                     questionary.Choice("(cancel)", value="__cancel__"),
                 ])
                 selected = await asyncio.to_thread(
@@ -553,15 +521,10 @@ async def _handle_command(
         table.add_row("/save", "Save session")
         table.add_row("/status", "Current status")
         table.add_row("", "")
-        table.add_row("[bold]Shortcuts (Esc+key)[/]", "")
-        table.add_row("Esc /", "Open command picker")
-        table.add_row("Esc M", "Switch mode")
-        table.add_row("Esc K", "Switch model")
-        table.add_row("Esc T", "Switch theme")
-        table.add_row("Esc S", "Skill picker")
-        table.add_row("Esc X", "Clear conversation")
+        table.add_row("[bold]Navigation[/]", "")
+        table.add_row("/", "Open command picker (mode-aware)")
+        table.add_row("↑↓", "Navigate history and menus")
         table.add_row("Ctrl+C", "Cancel / Exit")
-        table.add_row("↑↓", "Navigate history / menus")
         console.print(table)
 
     elif command == "/mode":
@@ -688,18 +651,35 @@ async def _handle_command(
             else:
                 console.print(f"  [{theme.error}]Skill not found: {arg}[/]")
         else:
-            # Arrow-key interactive skill selector — compact names grouped by category
+            # Arrow-key skill picker — mode-relevant skills first, then all
             import questionary
+
+            # Which categories matter for the current mode
+            MODE_CATEGORIES = {
+                "coder": ["development", "testing", "workflow"],
+                "researcher": ["research", "content", "writing"],
+                "shell": ["system", "utility", "automation"],
+                "general": ["documents", "business", "creative", "professional", "productivity"],
+            }
+            relevant_cats = set(MODE_CATEGORIES.get(current_mode, []))
+
             all_skills = mgr.list_skills()
-            categories = {}
-            for s in all_skills:
-                categories.setdefault(s.category, []).append(s)
             skill_choices = []
-            for cat in sorted(categories.keys()):
-                skill_choices.append(questionary.Separator(f"── {cat} ──"))
-                for s in categories[cat]:
-                    # Short name only — keeps the list scannable
+
+            # Relevant skills first
+            relevant = [s for s in all_skills if s.category in relevant_cats]
+            others = [s for s in all_skills if s.category not in relevant_cats]
+
+            if relevant:
+                skill_choices.append(questionary.Separator(f"── {current_mode} mode ──"))
+                for s in relevant:
                     skill_choices.append(questionary.Choice(s.name, value=s.name))
+
+            if others:
+                skill_choices.append(questionary.Separator("── other ──"))
+                for s in others:
+                    skill_choices.append(questionary.Choice(s.name, value=s.name))
+
             selected = await asyncio.to_thread(
                 lambda: questionary.select(
                     f"Skill ({len(all_skills)} available):",
