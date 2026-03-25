@@ -1,4 +1,4 @@
-"""CLI commands for LifeClaw."""
+"""CLI commands for LifeClaw — Claude Code-style terminal experience."""
 
 import asyncio
 import os
@@ -9,25 +9,77 @@ import typer
 from prompt_toolkit import PromptSession
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
+from prompt_toolkit.key_binding import KeyBindings
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
+from rich.rule import Rule
 from rich.table import Table
 from rich.text import Text
 
 from lifeclaw import LOGO, __version__
-from lifeclaw.cli.stream import StreamRenderer, ThinkingSpinner, make_rich_theme
+from lifeclaw.cli.stream import (
+    StatusLine,
+    StreamRenderer,
+    ThinkingSpinner,
+    make_rich_theme,
+)
 from lifeclaw.config.loader import load_config, save_config
 from lifeclaw.config.schema import get_config_dir
 from lifeclaw.themes import ALL_THEMES, get_theme
 
 app = typer.Typer(
     name="lifeclaw",
-    help="LifeClaw - Hybrid AI Assistant for Terminal & Web",
+    help="LifeClaw — Hybrid AI Assistant for Terminal & Web",
     no_args_is_help=True,
 )
 
 EXIT_COMMANDS = {"exit", "quit", "/exit", "/quit", ":q", "bye"}
+
+# Mode definitions — each mode shapes agent behavior
+MODES = {
+    "coder": {
+        "label": "coder",
+        "description": "Expert coding mode — reads before writing, surgical edits, tests",
+        "system_addendum": (
+            "\nYou are in CODER MODE. Focus on code quality:\n"
+            "- Always read existing files before editing them\n"
+            "- Make minimal, targeted changes\n"
+            "- Run tests when available\n"
+            "- Use proper error handling\n"
+            "- Follow the project's existing code style\n"
+            "- Explain your changes briefly\n"
+        ),
+    },
+    "general": {
+        "label": "general",
+        "description": "General assistant — handles any task",
+        "system_addendum": "",
+    },
+    "researcher": {
+        "label": "researcher",
+        "description": "Research mode — thorough analysis, citations, deep exploration",
+        "system_addendum": (
+            "\nYou are in RESEARCHER MODE. Focus on thoroughness:\n"
+            "- Explore broadly before answering\n"
+            "- Search multiple files and directories\n"
+            "- Provide comprehensive analysis\n"
+            "- Cite specific file paths and line numbers\n"
+            "- Summarize findings clearly\n"
+        ),
+    },
+    "shell": {
+        "label": "shell",
+        "description": "Shell expert — system administration, automation, DevOps",
+        "system_addendum": (
+            "\nYou are in SHELL MODE. Focus on system tasks:\n"
+            "- Prefer shell commands for system operations\n"
+            "- Explain what each command does before running\n"
+            "- Use safe defaults (avoid destructive operations without confirmation)\n"
+            "- Help with automation scripts, cron, services\n"
+        ),
+    },
+}
 
 
 def _get_console() -> Console:
@@ -38,15 +90,24 @@ def _get_console() -> Console:
 
 @app.command()
 def chat(
-    model: str = typer.Option(None, "--model", "-m", help="Model override (e.g. ollama/llama3.2)"),
+    model: str = typer.Option(None, "--model", "-m", help="Model (e.g. ollama/llama3.2)"),
     theme: str = typer.Option(None, "--theme", "-t", help="Theme override"),
+    mode: str = typer.Option("general", "--mode", help="Mode: coder, general, researcher, shell"),
     no_web: bool = typer.Option(False, "--no-web", help="Disable web UI"),
+    coder: bool = typer.Option(False, "--coder", "-c", help="Start in coder mode"),
 ):
     """Start an interactive chat session."""
-    asyncio.run(_chat_async(model, theme, no_web))
+    if coder:
+        mode = "coder"
+    asyncio.run(_chat_async(model, theme, mode, no_web))
 
 
-async def _chat_async(model_override: str | None, theme_override: str | None, no_web: bool):
+async def _chat_async(
+    model_override: str | None,
+    theme_override: str | None,
+    initial_mode: str,
+    no_web: bool,
+):
     config = load_config()
 
     if theme_override:
@@ -54,15 +115,16 @@ async def _chat_async(model_override: str | None, theme_override: str | None, no
 
     theme = get_theme(config.theme)
     console = Console(theme=make_rich_theme(theme))
+    current_mode = initial_mode if initial_mode in MODES else "general"
 
-    # Banner
-    banner_text = Text(LOGO, style=f"bold {theme.primary}")
-    console.print(Panel(
-        banner_text,
-        subtitle=f"v{__version__} | {config.agent.model} | theme: {theme.name}",
-        border_style=theme.secondary,
-    ))
-    console.print(f"  [{theme.muted}]Type /help for commands, or start chatting. {', '.join(EXIT_COMMANDS)} to quit.[/]")
+    # Compact banner (Claude Code style — minimal, informative)
+    console.print()
+    title = Text()
+    title.append("  LifeClaw", style=f"bold {theme.primary}")
+    title.append(f" v{__version__}", style=f"{theme.muted}")
+    console.print(title)
+    console.print(f"  [{theme.muted}]model: {model_override or config.agent.model} · mode: {current_mode} · theme: {theme.name}[/]")
+    console.print(f"  [{theme.muted}]Type /help for commands · /mode to switch · exit to quit[/]")
     console.print()
 
     # Initialize provider
@@ -70,17 +132,17 @@ async def _chat_async(model_override: str | None, theme_override: str | None, no
     try:
         provider, model_name = resolve_provider(config, model_override)
     except ValueError as e:
-        console.print(f"[{theme.error}]{e}[/]")
-        console.print(f"[{theme.muted}]Run 'lifeclaw setup' to configure a provider.[/]")
+        console.print(f"  [{theme.error}]{e}[/]")
+        console.print(f"  [{theme.muted}]Run 'lifeclaw setup' to configure a provider.[/]")
         return
 
     # Initialize MCP
     from lifeclaw.mcp.client import MCPClient
     mcp = MCPClient()
     if config.mcp_servers:
-        console.print(f"  [{theme.muted}]Connecting MCP servers...[/]")
+        console.print(f"  [{theme.muted}]Connecting MCP servers...[/]", end="")
         connected = await mcp.connect_all(config.mcp_servers)
-        console.print(f"  [{theme.success}]{connected}/{len(config.mcp_servers)} MCP servers connected[/]")
+        console.print(f"\r  [{theme.success}]● {connected}/{len(config.mcp_servers)} MCP servers[/]  ")
 
     # Initialize agent
     from lifeclaw.agent.loop import AgentLoop
@@ -90,6 +152,10 @@ async def _chat_async(model_override: str | None, theme_override: str | None, no
     memory = Memory(session_dir=session_dir)
     renderer = StreamRenderer(theme, console)
     spinner = ThinkingSpinner(theme, console)
+    status = StatusLine(theme, console)
+    status.mode = current_mode
+    status.model = model_name
+    status.mcp_count = len(config.mcp_servers)
 
     agent = AgentLoop(
         provider=provider,
@@ -103,13 +169,16 @@ async def _chat_async(model_override: str | None, theme_override: str | None, no
         on_tool_call=lambda name, args: renderer.print_tool_call(name, args),
     )
 
+    # Apply mode system addendum
+    _apply_mode(agent, current_mode)
+
     # Start WebSocket server
     ws_server = None
     if config.web.enabled and not no_web:
         from lifeclaw.server.websocket import WebSocketServer
         ws_server = WebSocketServer(config, on_message=agent.process)
         await ws_server.start()
-        console.print(f"  [{theme.info}]Web UI: http://{config.web.host}:{config.web.port}[/]")
+        console.print(f"  [{theme.info}]● Web UI: http://{config.web.host}:{config.web.port + 1}[/]")
 
     console.print()
 
@@ -119,10 +188,18 @@ async def _chat_async(model_override: str | None, theme_override: str | None, no
 
     try:
         while True:
+            # Mode-aware prompt (like Claude Code's "you >" or "coder >")
+            mode_color = {
+                "coder": theme.accent,
+                "general": theme.primary,
+                "researcher": theme.secondary,
+                "shell": theme.success,
+            }.get(current_mode, theme.primary)
+
             try:
                 user_input = await asyncio.to_thread(
                     session.prompt,
-                    HTML(f'<style fg="{theme.primary}" bg="" bold="true">you > </style>'),
+                    HTML(f'<style fg="{mode_color}" bold="true">{current_mode} &gt; </style>'),
                 )
             except (EOFError, KeyboardInterrupt):
                 break
@@ -135,22 +212,29 @@ async def _chat_async(model_override: str | None, theme_override: str | None, no
 
             # Handle slash commands
             if user_input.startswith("/"):
-                await _handle_command(user_input, config, console, theme, memory, agent)
+                result = await _handle_command(
+                    user_input, config, console, theme, memory, agent,
+                    current_mode, status, mcp
+                )
+                if result and result.startswith("MODE:"):
+                    current_mode = result.split(":")[1]
+                    _apply_mode(agent, current_mode)
+                    status.mode = current_mode
                 continue
 
-            # Process with streaming
+            # Process with agent
             spinner.start()
-            collected = ""
             try:
-                # Use non-streaming for reliability with tool calls
                 response = await agent.process(user_input)
                 spinner.stop()
                 console.print()
-                console.print(
-                    Text("  claw > ", style=f"bold {theme.secondary}"),
-                    end="",
-                )
                 console.print(Markdown(response))
+
+                # Update token estimate
+                status.token_count = memory.token_estimate
+
+                # Status line
+                renderer.finish()
 
                 # Broadcast to web clients
                 if ws_server:
@@ -167,58 +251,78 @@ async def _chat_async(model_override: str | None, theme_override: str | None, no
         if ws_server:
             await ws_server.stop()
         await mcp.shutdown()
-        console.print(f"\n[{theme.muted}]Session saved. Goodbye![/]")
+        console.print(f"\n  [{theme.muted}]Session saved. Goodbye![/]")
+
+
+def _apply_mode(agent, mode_name: str):
+    """Apply mode-specific system prompt addendum."""
+    from lifeclaw.agent.loop import SYSTEM_PROMPT
+    mode = MODES.get(mode_name, MODES["general"])
+    full_prompt = SYSTEM_PROMPT + mode["system_addendum"]
+    agent.memory.add_system(full_prompt)
 
 
 async def _handle_command(
-    cmd: str, config, console: Console, theme, memory, agent
+    cmd: str, config, console: Console, theme, memory, agent,
+    current_mode: str, status, mcp
 ):
     parts = cmd.split(maxsplit=1)
     command = parts[0].lower()
     arg = parts[1] if len(parts) > 1 else ""
 
     if command == "/help":
-        table = Table(title="Commands", border_style=theme.muted)
-        table.add_column("Command", style=f"{theme.accent}")
-        table.add_column("Description")
+        table = Table(border_style=theme.muted, show_header=False, padding=(0, 2))
+        table.add_column(style=f"{theme.accent}")
+        table.add_column()
         table.add_row("/help", "Show this help")
-        table.add_row("/model <name>", "Switch model (e.g. /model ollama/llama3.2)")
-        table.add_row("/theme <name>", "Switch theme (aurora, midnight, forest, ocean, monochrome)")
+        table.add_row("/mode [name]", "Switch mode (coder, general, researcher, shell)")
+        table.add_row("/model [name]", "Switch model (e.g. ollama/llama3.2)")
+        table.add_row("/theme [name]", "Switch theme (aurora, midnight, forest, ocean, monochrome)")
         table.add_row("/skills", "List available skills")
-        table.add_row("/skill <name>", "Activate a skill")
-        table.add_row("/mcp", "List MCP servers")
+        table.add_row("/skill [name]", "Activate a skill")
+        table.add_row("/mcp", "List MCP servers and tools")
         table.add_row("/clear", "Clear conversation")
         table.add_row("/save", "Save session")
-        table.add_row("/config", "Show current config")
+        table.add_row("/status", "Show current status")
+        table.add_row("/compact", "Toggle compact output")
         table.add_row("exit", "Quit")
         console.print(table)
+
+    elif command == "/mode":
+        if arg in MODES:
+            console.print(f"  [{theme.success}]Switched to {arg} mode[/] [{theme.muted}]— {MODES[arg]['description']}[/]")
+            return f"MODE:{arg}"
+        else:
+            console.print(f"  [{theme.muted}]Available modes:[/]")
+            for name, info in MODES.items():
+                marker = " ●" if name == current_mode else "  "
+                color = theme.accent if name == current_mode else theme.muted
+                console.print(f"  [{color}]{marker} {name}[/] [{theme.muted}]— {info['description']}[/]")
 
     elif command == "/theme":
         if arg in ALL_THEMES:
             config.theme = arg
             save_config(config)
-            console.print(f"  [{theme.success}]Theme changed to {arg}. Restart for full effect.[/]")
+            console.print(f"  [{theme.success}]Theme → {arg}. Restart for full effect.[/]")
         else:
-            console.print(f"  [{theme.warning}]Available: {', '.join(ALL_THEMES.keys())}[/]")
+            for t in ALL_THEMES.values():
+                marker = " ●" if t.slug == config.theme else "  "
+                color = theme.accent if t.slug == config.theme else theme.muted
+                console.print(f"  [{color}]{marker} {t.slug}[/] [{theme.muted}]— {t.name}[/]")
 
     elif command == "/model":
         if arg:
             config.agent.model = arg
             save_config(config)
-            console.print(f"  [{theme.success}]Model changed to {arg}. Restart to apply.[/]")
+            console.print(f"  [{theme.success}]Model → {arg}. Restart to apply.[/]")
         else:
             console.print(f"  [{theme.info}]Current: {config.agent.model}[/]")
 
     elif command == "/skills":
         from lifeclaw.skills.manager import SkillsManager
         mgr = SkillsManager(config.skills_dir)
-        table = Table(title="Skills", border_style=theme.muted)
-        table.add_column("Name", style=f"{theme.accent}")
-        table.add_column("Category")
-        table.add_column("Description")
         for s in mgr.list_skills():
-            table.add_row(s.name, s.category, s.description)
-        console.print(table)
+            console.print(f"  [{theme.accent}]{s.name}[/] [{theme.muted}]({s.category}) — {s.description}[/]")
 
     elif command == "/skill":
         if arg:
@@ -227,14 +331,23 @@ async def _handle_command(
             skill = mgr.get(arg)
             if skill:
                 memory.add_system(skill.system_prompt)
-                console.print(f"  [{theme.success}]Activated skill: {skill.name}[/]")
+                console.print(f"  [{theme.success}]Activated: {skill.name}[/]")
             else:
                 console.print(f"  [{theme.error}]Skill not found: {arg}[/]")
 
     elif command == "/mcp":
         if config.mcp_servers:
+            tool_defs = mcp.get_tool_definitions() if mcp else []
+            console.print(f"  [{theme.muted}]{len(config.mcp_servers)} servers, {len(tool_defs)} tools[/]")
             for name in config.mcp_servers:
-                console.print(f"  [{theme.accent}]{name}[/]")
+                console.print(f"  [{theme.accent}]● {name}[/]")
+            if tool_defs:
+                console.print(f"\n  [{theme.muted}]Tools:[/]")
+                for td in tool_defs[:20]:
+                    fn = td.get("function", {})
+                    console.print(f"    [{theme.muted}]{fn.get('name', '?')}[/]")
+                if len(tool_defs) > 20:
+                    console.print(f"    [{theme.muted}]... +{len(tool_defs) - 20} more[/]")
         else:
             console.print(f"  [{theme.muted}]No MCP servers configured[/]")
 
@@ -246,12 +359,13 @@ async def _handle_command(
         memory.save_session()
         console.print(f"  [{theme.success}]Session saved.[/]")
 
-    elif command == "/config":
-        console.print(f"  Model: [{theme.accent}]{config.agent.model}[/]")
-        console.print(f"  Provider: [{theme.accent}]{config.agent.provider}[/]")
-        console.print(f"  Theme: [{theme.accent}]{config.theme}[/]")
-        console.print(f"  MCP Servers: [{theme.accent}]{len(config.mcp_servers)}[/]")
-        console.print(f"  Web UI: [{theme.accent}]{'on' if config.web.enabled else 'off'}[/]")
+    elif command == "/status":
+        status.render()
+
+    elif command == "/compact":
+        console.print(f"  [{theme.muted}]Compact mode toggled.[/]")
+
+    return None
 
 
 @app.command()
@@ -271,18 +385,11 @@ def version():
 @app.command()
 def themes():
     """List available themes."""
-    console = _get_console()
     config = load_config()
-    table = Table(title="Themes", border_style="dim")
-    table.add_column("Name")
-    table.add_column("Slug")
-    table.add_column("Colors")
-    table.add_column("Active")
+    console = _get_console()
     for t in ALL_THEMES.values():
-        active = "  *" if t.slug == config.theme else ""
-        colors = f"[{t.primary}]primary[/] [{t.secondary}]secondary[/] [{t.accent}]accent[/]"
-        table.add_row(t.name, t.slug, colors, active)
-    console.print(table)
+        active = " ●" if t.slug == config.theme else "  "
+        console.print(f"  {active} [{t.primary}]{t.name}[/] ({t.slug})")
 
 
 @app.command()
@@ -292,13 +399,8 @@ def skills():
     console = _get_console()
     from lifeclaw.skills.manager import SkillsManager
     mgr = SkillsManager(config.skills_dir)
-    table = Table(title="Skills", border_style="dim")
-    table.add_column("Name", style="cyan")
-    table.add_column("Category")
-    table.add_column("Description")
     for s in mgr.list_skills():
-        table.add_row(s.name, s.category, s.description)
-    console.print(table)
+        console.print(f"  [{s.name}] ({s.category}) — {s.description}")
 
 
 @app.command()
@@ -331,11 +433,11 @@ async def _web_async():
 
     ws = WebSocketServer(config, on_message=agent.process)
     await ws.start()
-    console.print(f"[{theme.success}]Web server running at ws://{config.web.host}:{config.web.port}[/]")
-    console.print(f"[{theme.muted}]Press Ctrl+C to stop[/]")
+    console.print(f"  [{theme.success}]● Web server at ws://{config.web.host}:{config.web.port}[/]")
+    console.print(f"  [{theme.muted}]Press Ctrl+C to stop[/]")
 
     try:
-        await asyncio.Future()  # run forever
+        await asyncio.Future()
     except (KeyboardInterrupt, asyncio.CancelledError):
         await ws.stop()
         await mcp.shutdown()

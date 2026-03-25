@@ -1,12 +1,15 @@
-"""Streaming output renderer with theme support for the terminal."""
+"""Claude Code-style streaming output renderer with theme support."""
 
-import sys
+import time
 from typing import Any
 
-from rich.console import Console
+from rich.columns import Columns
+from rich.console import Console, Group
 from rich.live import Live
 from rich.markdown import Markdown
+from rich.padding import Padding
 from rich.panel import Panel
+from rich.rule import Rule
 from rich.spinner import Spinner
 from rich.syntax import Syntax
 from rich.text import Text
@@ -31,16 +34,20 @@ def make_rich_theme(theme: Theme) -> RichTheme:
 
 
 class StreamRenderer:
-    """Renders streaming LLM output with Rich formatting."""
+    """Claude Code-style streaming renderer with tool call indicators."""
 
     def __init__(self, theme: Theme, console: Console):
         self.theme = theme
         self.console = console
         self._buffer = ""
         self._live: Live | None = None
+        self._tool_count = 0
+        self._start_time = 0.0
 
     def start(self):
         self._buffer = ""
+        self._tool_count = 0
+        self._start_time = time.monotonic()
         self._live = Live("", console=self.console, refresh_per_second=15, transient=True)
         self._live.start()
 
@@ -56,20 +63,55 @@ class StreamRenderer:
     def finish(self):
         if self._live:
             self._live.stop()
-        # Print final formatted version
         if self._buffer.strip():
-            self.console.print()
             self.console.print(Markdown(self._buffer))
+        # Status line like Claude Code
+        elapsed = time.monotonic() - self._start_time if self._start_time else 0
+        status_parts = []
+        if self._tool_count:
+            status_parts.append(f"{self._tool_count} tool use{'s' if self._tool_count != 1 else ''}")
+        status_parts.append(f"{elapsed:.1f}s")
+        status = " · ".join(status_parts)
+        self.console.print(f"  [{self.theme.muted}]{status}[/]")
 
     def print_tool_call(self, name: str, args: dict):
+        self._tool_count += 1
+        # Claude Code style: indented with bullet, tool name highlighted
+        arg_summary = ""
+        if "path" in args:
+            arg_summary = f" [{self.theme.muted}]{args['path']}[/]"
+        elif "command" in args:
+            cmd = args["command"]
+            if len(cmd) > 60:
+                cmd = cmd[:57] + "..."
+            arg_summary = f" [{self.theme.muted}]{cmd}[/]"
+        elif "query" in args:
+            arg_summary = f" [{self.theme.muted}]{args['query']}[/]"
+        elif "pattern" in args:
+            arg_summary = f" [{self.theme.muted}]{args['pattern']}[/]"
+
         self.console.print(
-            f"  [{self.theme.muted}]> tool:[/] [{self.theme.accent}]{name}[/]",
+            f"  [{self.theme.accent}]●[/] [{self.theme.accent} bold]{name}[/]{arg_summary}",
             highlight=False,
         )
 
+    def print_tool_result(self, name: str, result: str, success: bool = True):
+        """Show abbreviated tool result like Claude Code."""
+        lines = result.strip().split("\n")
+        if len(lines) > 3:
+            preview = "\n".join(lines[:3]) + f"\n  ... +{len(lines) - 3} lines"
+        else:
+            preview = result.strip()
+
+        if len(preview) > 200:
+            preview = preview[:197] + "..."
+
+        color = self.theme.success if success else self.theme.error
+        self.console.print(f"    [{color}]{'✓' if success else '✗'}[/] [{self.theme.muted}]{preview}[/]")
+
 
 class ThinkingSpinner:
-    """Shows a spinner while the AI is thinking."""
+    """Claude Code-style thinking indicator."""
 
     def __init__(self, theme: Theme, console: Console):
         self.theme = theme
@@ -77,11 +119,53 @@ class ThinkingSpinner:
         self._live: Live | None = None
 
     def start(self, message: str = "Thinking"):
-        spinner = Spinner("dots", text=Text(f" {message}...", style=f"{self.theme.secondary}"))
+        spinner_text = Text(f" {message}...", style=f"{self.theme.secondary}")
+        spinner = Spinner("dots", text=spinner_text, style=f"{self.theme.secondary}")
         self._live = Live(spinner, console=self.console, refresh_per_second=10, transient=True)
         self._live.start()
+
+    def update_message(self, message: str):
+        if self._live:
+            spinner_text = Text(f" {message}...", style=f"{self.theme.secondary}")
+            spinner = Spinner("dots", text=spinner_text, style=f"{self.theme.secondary}")
+            self._live.update(spinner)
 
     def stop(self):
         if self._live:
             self._live.stop()
             self._live = None
+
+
+class StatusLine:
+    """Persistent status line at bottom of terminal (like Claude Code)."""
+
+    def __init__(self, theme: Theme, console: Console):
+        self.theme = theme
+        self.console = console
+        self.mode = "general"
+        self.model = ""
+        self.provider = ""
+        self.mcp_count = 0
+        self.token_count = 0
+
+    def render(self):
+        """Print a status bar."""
+        mode_colors = {
+            "coder": self.theme.accent,
+            "general": self.theme.primary,
+            "researcher": self.theme.secondary,
+            "shell": self.theme.success,
+        }
+        mode_color = mode_colors.get(self.mode, self.theme.primary)
+
+        parts = [
+            f"[{mode_color} bold]{self.mode}[/]",
+            f"[{self.theme.muted}]{self.model}[/]",
+        ]
+        if self.mcp_count:
+            parts.append(f"[{self.theme.muted}]{self.mcp_count} MCP[/]")
+        if self.token_count:
+            parts.append(f"[{self.theme.muted}]~{self.token_count} tokens[/]")
+
+        bar = f"  [{self.theme.muted}]│[/] ".join(parts)
+        self.console.print(f"  {bar}")
