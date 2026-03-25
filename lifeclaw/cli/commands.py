@@ -425,13 +425,16 @@ async def _chat_async(
     # Apply mode system addendum
     _apply_mode(agent, current_mode)
 
-    # Start WebSocket server
+    # Start WebSocket + static file servers for web dashboard
     ws_server = None
     if config.web.enabled and not no_web:
         from lifeclaw.server.websocket import WebSocketServer
+        from lifeclaw.server.static import serve_web
         ws_server = WebSocketServer(config, on_message=agent.process)
         await ws_server.start()
-        console.print(f"  [{theme.info}]● Web UI: http://{config.web.host}:{config.web.port + 1}[/]")
+        http_port = config.web.port + 1
+        await serve_web(config.web.host, http_port)
+        console.print(f"  [{theme.info}]● Web UI: http://{config.web.host}:{http_port}[/]")
 
     console.print()
 
@@ -592,6 +595,8 @@ async def _chat_async(
         agent.economics.save_session()
         if ws_server:
             await ws_server.stop()
+        from lifeclaw.server.static import stop_web
+        await stop_web()
         await mcp.shutdown()
         cost_summary = agent.economics.summary
         console.print(f"\n  [{theme.muted}]Session saved. {cost_summary['cost_display']} spent across {cost_summary['calls']} calls. Goodbye![/]")

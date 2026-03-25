@@ -1,13 +1,19 @@
 """Simple HTTP server to serve the web dashboard."""
 
 import asyncio
+import threading
 from pathlib import Path
 
 from loguru import logger
 
 
+_server = None
+
+
 async def serve_web(host: str = "127.0.0.1", port: int = 3120):
     """Serve the built web dashboard via a simple HTTP handler."""
+    global _server
+
     # Try Vite build output first, then dev fallbacks
     base = Path(__file__).parent.parent.parent / "web"
     for candidate in ["dist", "out", ".next", "."]:
@@ -15,10 +21,9 @@ async def serve_web(host: str = "127.0.0.1", port: int = 3120):
         if web_dir.exists() and (web_dir / "index.html").exists():
             break
     else:
-        # Fallback: serve the web/ root which has index.html
         web_dir = base
         if not (web_dir / "index.html").exists():
-            logger.warning(f"No web build found. Run: cd web && npm install && npm run build")
+            logger.warning("No web build found. Run: cd web && npm install && npm run build")
             return
 
     import http.server
@@ -29,12 +34,17 @@ async def serve_web(host: str = "127.0.0.1", port: int = 3120):
         directory=str(web_dir),
     )
 
-    loop = asyncio.get_event_loop()
-    server = await loop.run_in_executor(
-        None,
-        lambda: http.server.HTTPServer((host, port), handler),
-    )
+    _server = http.server.HTTPServer((host, port), handler)
     logger.info(f"Web dashboard at http://{host}:{port}")
 
-    # Run in background thread
-    loop.run_in_executor(None, server.serve_forever)
+    # Run in daemon thread so it dies with the main process
+    t = threading.Thread(target=_server.serve_forever, daemon=True)
+    t.start()
+
+
+async def stop_web():
+    """Shut down the static file server cleanly."""
+    global _server
+    if _server:
+        _server.shutdown()
+        _server = None
