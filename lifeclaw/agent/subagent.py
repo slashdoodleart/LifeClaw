@@ -1,6 +1,5 @@
 """Sub-agent system — spawn isolated agents for parallel task execution.
 
-Inspired by ClawWork multi-agent orchestration and nanobot spawn tool.
 Each sub-agent gets its own memory context and can work independently.
 """
 

@@ -67,6 +67,10 @@ class AgentLoop:
         self.on_stream = on_stream
         self.on_tool_call = on_tool_call
 
+        # Economics tracker — every LLM call has a cost
+        from lifeclaw.agent.economics import EconomicsTracker
+        self.economics = EconomicsTracker()
+
         # Set system prompt
         self.memory.add_system(SYSTEM_PROMPT)
 
@@ -87,9 +91,18 @@ class AgentLoop:
                     model=self.model,
                 )
             except Exception as e:
-                error_msg = f"Provider error: {e}"
-                logger.error(error_msg)
-                return error_msg
+                error_msg = str(e) or repr(e)
+                logger.error(f"Provider error: {error_msg}")
+                return f"Provider error: {error_msg}"
+
+            # Track token economics
+            usage = response.usage
+            if usage:
+                self.economics.record(
+                    self.model,
+                    usage.get("prompt_tokens", 0),
+                    usage.get("completion_tokens", 0),
+                )
 
             if not response.has_tool_calls:
                 # Final text response
@@ -133,7 +146,8 @@ class AgentLoop:
                         collected += chunk.delta
                         yield chunk.delta
             except Exception as e:
-                yield f"\nProvider error: {e}"
+                error_msg = str(e) or repr(e)
+                yield f"\nProvider error: {error_msg}"
                 return
 
             # After streaming, check if there were tool calls by doing a non-stream call

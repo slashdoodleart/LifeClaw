@@ -1,9 +1,7 @@
-"""MetaClaw — cross-run learning system.
+"""Cross-run learning system.
 
 Extracts structured lessons from pipeline runs and injects them into
 future sessions. Failures become reusable skills.
-
-Inspired by MetaClaw (aiming-lab/MetaClaw).
 """
 
 import json
@@ -31,10 +29,10 @@ class Lesson:
             self.created_at = datetime.now().isoformat()
 
 
-class MetaClawBridge:
+class LearningBridge:
     """Manages cross-run learning — failures become reusable lessons."""
 
-    def __init__(self, store_path: str | Path = "~/.lifeclaw/metaclaw"):
+    def __init__(self, store_path: str | Path = "~/.lifeclaw/learning"):
         self.store_path = Path(store_path).expanduser()
         self.store_path.mkdir(parents=True, exist_ok=True)
         self.lessons: list[Lesson] = []
@@ -91,7 +89,7 @@ class MetaClawBridge:
         )
         self.lessons.append(lesson)
         self._save()
-        logger.info(f"MetaClaw: learned '{trigger}' ({category})")
+        logger.info(f"Learned: '{trigger}' ({category})")
         return lesson
 
     def get_relevant_lessons(self, context: str, max_results: int = 5) -> list[Lesson]:
@@ -99,7 +97,6 @@ class MetaClawBridge:
         scored = []
         context_lower = context.lower()
         for lesson in self.lessons:
-            # Simple keyword matching (could be enhanced with embeddings)
             trigger_words = set(lesson.trigger.lower().split())
             context_words = set(context_lower.split())
             overlap = len(trigger_words & context_words)
@@ -116,7 +113,7 @@ class MetaClawBridge:
         if not relevant:
             return ""
 
-        lines = ["[MetaClaw Lessons — learned from previous runs]"]
+        lines = ["[Lessons — learned from previous runs]"]
         for lesson in relevant:
             lines.append(f"- [{lesson.category}] {lesson.content}")
             lesson.times_applied += 1
@@ -141,3 +138,7 @@ class MetaClawBridge:
             "avg_confidence": sum(l.confidence for l in self.lessons) / max(len(self.lessons), 1),
             "total_applications": sum(l.times_applied for l in self.lessons),
         }
+
+
+# Backward compat alias
+MetaClawBridge = LearningBridge

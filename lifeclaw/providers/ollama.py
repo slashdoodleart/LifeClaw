@@ -4,6 +4,7 @@ import json
 from typing import AsyncIterator
 
 import httpx
+from loguru import logger
 
 from lifeclaw.providers.base import (
     LLMMessage,
@@ -59,9 +60,7 @@ class OllamaProvider(LLMProvider):
         if tools:
             payload["tools"] = tools
 
-        resp = await self.client.post("/api/chat", json=payload)
-        resp.raise_for_status()
-        data = resp.json()
+        data = await self._post_chat(payload, tools_sent=bool(tools))
 
         msg = data.get("message", {})
         tool_calls = []
@@ -85,6 +84,42 @@ class OllamaProvider(LLMProvider):
             },
         )
 
+    async def _post_chat(self, payload: dict, tools_sent: bool = False) -> dict:
+        """Send chat request to Ollama with error handling and tool fallback."""
+        try:
+            resp = await self.client.post("/api/chat", json=payload)
+        except httpx.ConnectError:
+            raise ConnectionError("Cannot connect to Ollama. Is it running? (ollama serve)")
+        except httpx.TimeoutException:
+            raise TimeoutError("Ollama request timed out. The model may be loading or the prompt is too large.")
+
+        # Check for HTTP errors with body context
+        if resp.status_code != 200:
+            body = resp.text
+            # If tools caused the error, retry without them
+            if tools_sent and ("tool" in body.lower() or resp.status_code == 400):
+                logger.warning(f"Ollama rejected tools (HTTP {resp.status_code}), retrying without tools")
+                payload.pop("tools", None)
+                return await self._post_chat(payload, tools_sent=False)
+            raise RuntimeError(f"Ollama error (HTTP {resp.status_code}): {body[:500]}")
+
+        try:
+            data = resp.json()
+        except json.JSONDecodeError:
+            raise RuntimeError(f"Ollama returned invalid JSON: {resp.text[:300]}")
+
+        # Check for Ollama-level error in response body
+        if "error" in data:
+            error_msg = data["error"]
+            # If tools caused the error, retry without them
+            if tools_sent and ("tool" in error_msg.lower() or "not supported" in error_msg.lower()):
+                logger.warning(f"Model doesn't support tools: {error_msg}. Retrying without tools.")
+                payload.pop("tools", None)
+                return await self._post_chat(payload, tools_sent=False)
+            raise RuntimeError(f"Ollama error: {error_msg}")
+
+        return data
+
     async def chat_stream(
         self,
         messages: list[LLMMessage],
@@ -102,18 +137,35 @@ class OllamaProvider(LLMProvider):
         if tools:
             payload["tools"] = tools
 
-        async with self.client.stream("POST", "/api/chat", json=payload) as resp:
-            resp.raise_for_status()
-            async for line in resp.aiter_lines():
-                if not line.strip():
-                    continue
-                data = json.loads(line)
-                msg = data.get("message", {})
-                done = data.get("done", False)
-                yield StreamChunk(
-                    delta=msg.get("content", ""),
-                    finish_reason="stop" if done else None,
-                )
+        try:
+            async with self.client.stream("POST", "/api/chat", json=payload) as resp:
+                if resp.status_code != 200:
+                    body = await resp.aread()
+                    body_text = body.decode(errors="replace")
+                    if tools and ("tool" in body_text.lower() or resp.status_code == 400):
+                        logger.warning("Ollama rejected tools in stream, falling back without tools")
+                        payload.pop("tools", None)
+                        async for chunk in self.chat_stream(messages, tools=None, temperature=temperature, max_tokens=max_tokens, model=model):
+                            yield chunk
+                        return
+                    raise RuntimeError(f"Ollama error (HTTP {resp.status_code}): {body_text[:500]}")
+
+                async for line in resp.aiter_lines():
+                    if not line.strip():
+                        continue
+                    data = json.loads(line)
+                    if "error" in data:
+                        raise RuntimeError(f"Ollama error: {data['error']}")
+                    msg = data.get("message", {})
+                    done = data.get("done", False)
+                    yield StreamChunk(
+                        delta=msg.get("content", ""),
+                        finish_reason="stop" if done else None,
+                    )
+        except httpx.ConnectError:
+            raise ConnectionError("Cannot connect to Ollama. Is it running? (ollama serve)")
+        except httpx.TimeoutException:
+            raise TimeoutError("Ollama request timed out.")
 
     async def list_models(self) -> list[str]:
         resp = await self.client.get("/api/tags")

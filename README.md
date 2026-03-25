@@ -15,20 +15,23 @@
 
 LifeClaw is a unified AI assistant that combines a surgical code editor, autonomous researcher, document creator, and multi-channel messaging bot — all in one CLI. It runs as a terminal app, a web dashboard, or a gateway service connected to Telegram, Discord, Slack, and more.
 
-One tool. Every task. Local-first. 60+ built-in skills. 17 LLM providers. Zero config web search. Autonomous 23-stage research pipeline. Document creation (DOCX, XLSX, PPTX, PDF). Scheduled tasks. Arrow-key navigation everywhere.
+One tool. Every task. Local-first. 60+ built-in skills. 17 LLM providers. Zero config web search. Autonomous 23-stage research pipeline with PIVOT/REFINE loops. Real literature APIs. Multi-agent debate. Token economics tracking. Combo skills. Document creation. Scheduled tasks. Arrow-key navigation everywhere.
 
 ## Why LifeClaw
 
 - **One CLI, every use case.** Coding, research, writing, documents, shell ops, web search, channel bots — all behind one prompt
 - **Local-first.** Auto-detects Ollama. Your data stays on your machine unless you choose otherwise
 - **Gateway mode.** Run LifeClaw as a service — connect Telegram, Discord, Slack bots with cron scheduling
-- **60+ built-in skills.** From TDD to PDF creation to autonomous research papers
-- **Autonomous research.** 23-stage pipeline turns an idea into a conference-ready paper with real literature, experiments, and peer review
+- **60+ built-in skills.** From TDD to PDF creation to autonomous research papers. Combo skills with `+` syntax
+- **Autonomous research.** 23-stage, 8-phase pipeline with PIVOT/REFINE decision loops, multi-agent debate, real academic literature from OpenAlex/Semantic Scholar/arXiv, 4-layer citation verification, LaTeX export, and self-healing
+- **Token economics.** Every LLM call tracked with real cost estimates. See exactly what you spend
 - **Document creation.** Create Word docs, spreadsheets, presentations, and PDFs natively
 - **Web search built-in.** DuckDuckGo (zero config), Brave, Tavily, Jina, SearXNG — with automatic fallback
+- **Cross-run learning.** LifeClaw extracts lessons from failures and injects them into future sessions
 - **MCP native.** 9 pre-integrated MCP servers, auto-import from existing configs
 - **Every provider.** 17 providers: Ollama, OpenAI, Anthropic, Gemini, OpenRouter, DeepSeek, Groq, Mistral, and more
 - **Arrow-key navigation.** No commands to memorize — just arrow keys and Enter for everything
+- **Live autocomplete.** Type `/` and see commands + skills instantly — no Enter needed
 - **Dual interface.** Terminal CLI and web dashboard share the same agent brain via WebSocket
 
 ## Quick Start
@@ -42,21 +45,6 @@ pip3.11 install git+https://github.com/slashdoodleart/LifeClaw.git
 lifeclaw         # Arrow-key interactive menu
 ```
 
-### npm (auto-handles Python)
-
-```bash
-npm install -g github:slashdoodleart/LifeClaw
-lifeclaw setup
-lifeclaw chat
-```
-
-### Docker
-
-```bash
-docker build -t lifeclaw https://github.com/slashdoodleart/LifeClaw.git
-docker run -it --network host -v ~/.lifeclaw:/root/.lifeclaw lifeclaw
-```
-
 ### From source
 
 ```bash
@@ -66,10 +54,17 @@ python3.11 -m pip install -e .
 lifeclaw
 ```
 
+### Docker
+
+```bash
+docker build -t lifeclaw https://github.com/slashdoodleart/LifeClaw.git
+docker run -it --network host -v ~/.lifeclaw:/root/.lifeclaw lifeclaw
+```
+
 ## Features
 
 ### Terminal UI
-Rich, themed terminal with streaming output, markdown, syntax highlighting, and arrow-key navigation.
+Rich, themed terminal with streaming output, markdown, syntax highlighting, live autocomplete, and arrow-key navigation.
 
 ```bash
 lifeclaw                          # Interactive arrow-key main menu
@@ -81,24 +76,94 @@ lifeclaw research "your topic"    # 23-stage autonomous research pipeline
 lifeclaw setup                    # Interactive setup wizard
 lifeclaw channels                 # View messaging integrations
 lifeclaw cron                     # View scheduled tasks
-lifeclaw web                      # Web dashboard only
+lifeclaw web                      # Web dashboard
 ```
 
 ### Slash Commands
 | Command | Description |
 |---------|-------------|
-| `/` | Arrow-key command picker (all commands + skills inline) |
+| `/` | Arrow-key command picker (mode-aware, shows relevant skills) |
 | `/mode` | Switch mode (coder, general, researcher, shell) |
 | `/model` | Switch model — live Ollama picker + custom entry |
 | `/theme` | Switch theme with arrow-key picker |
 | `/skill` | Activate a skill with arrow-key picker |
+| `/skill docx+research` | Combo skills — activate multiple at once |
 | `/skills` | List all 60+ available skills |
-| `/mcp` | List connected MCP servers and tools |
 | `/research <topic>` | Start autonomous 23-stage research pipeline |
 | `/review` | PR-style code review of current directory |
+| `/costs` | Token economics for current session |
+| `/websearch <query>` | Search the web |
+| `/spawn <task>` | Run a sub-agent in parallel |
+| `/learn` | View cross-run learned lessons |
+| `/mcp` | List connected MCP servers and tools |
+| `/channels` | View messaging integrations |
+| `/cron` | View scheduled tasks |
 | `/clear` | Clear conversation |
 | `/save` | Save session |
 | `/status` | Current status |
+
+### Combo Skills
+
+Activate multiple skills at once with `+` syntax:
+
+```
+/docx+research       # Document creation + research mode
+/xlsx+web-research    # Spreadsheet + web research
+/tdd+code-review     # Test-driven dev + code review
+```
+
+### Autonomous Research Pipeline
+
+Full 23-stage, 8-phase pipeline:
+
+```bash
+lifeclaw research "transformer attention for long documents"
+```
+
+**Phase A: Research Scoping** — Topic decomposition, problem formalization
+**Phase B: Literature Discovery** — Real papers from OpenAlex, Semantic Scholar, arXiv (no hallucinated refs)
+**Phase C: Knowledge Synthesis** — Multi-agent debate for hypothesis generation
+**Phase D: Experiment Design** — Hardware-aware (CUDA/MPS/CPU), gate stage
+**Phase E: Experiment Execution** — Sandbox execution with self-healing
+**Phase F: Analysis & Decision** — PIVOT (new direction) / REFINE (tweak params) / PROCEED loops
+**Phase G: Paper Writing** — Section-by-section drafting + multi-agent peer review
+**Phase H: Finalization** — Quality gate, LaTeX export, 4-layer citation verification
+
+Output:
+| File | Description |
+|------|-------------|
+| `paper_draft.md` | Full academic paper |
+| `paper.tex` | LaTeX with conference formatting |
+| `references.bib` | Real BibTeX from OpenAlex/S2/arXiv |
+| `verification_report.json` | 4-layer citation verification |
+| `experiments/` | Generated code + results |
+| `charts/` | Visualizations with error bars |
+| `knowledge_base/` | Structured KB (decisions, findings, literature) |
+
+### Token Economics
+
+Every LLM call is tracked with real cost estimates:
+
+```
+Cost: $0.0234 | Tokens: 12,450 | Calls: 8
+```
+
+- Cloud models: real pricing (GPT-4o, Claude, Gemini, etc.)
+- Local models (Ollama): free, shows token count only
+- Session summary on exit
+- `/costs` command for detailed breakdown
+- Historical data saved to `~/.lifeclaw/economics/`
+
+### Cross-Run Learning
+
+Failures become reusable lessons. When the pipeline encounters errors, it extracts structured lessons and injects them into future sessions:
+
+```
+Run N fails → Lesson extracted → Stored in ~/.lifeclaw/learning/
+Run N+1 → Lessons injected → Same mistake avoided
+```
+
+Use `/learn` to view accumulated lessons and their confidence scores.
 
 ### Multi-Channel Messaging (Gateway Mode)
 
@@ -111,53 +176,7 @@ Connect LifeClaw to your favorite chat platforms. Run `lifeclaw gateway` to star
 | **Slack** | Bot token + App-level token (Socket Mode) |
 | **WebChat** | Built-in, just enable |
 
-Configure in `~/.lifeclaw/config.json`:
-```json
-{
-  "channels": {
-    "telegram": {
-      "enabled": true,
-      "token": "YOUR_BOT_TOKEN",
-      "allowFrom": ["*"]
-    }
-  }
-}
-```
-
-### Cron / Scheduled Tasks
-
-Create recurring agent tasks that run on schedule:
-
-```json
-// ~/.lifeclaw/cron/jobs.json
-[
-  {
-    "id": "abc123",
-    "name": "daily-standup",
-    "prompt": "Generate a standup summary from recent git commits",
-    "schedule": "daily",
-    "enabled": true
-  }
-]
-```
-
-Schedules: `5m`, `1h`, `30s`, `daily`, `hourly`, `weekly`
-
-### Autonomous Research Pipeline
-
-Full 23-stage pipeline from idea to conference-ready paper:
-
-```bash
-lifeclaw research "transformer attention for long documents"
-```
-
-Stages: topic refinement → hypotheses → literature search → gap analysis → methodology → experiments → code generation → execution → statistical analysis → visualization → paper writing (7 sections) → peer review → final revision
-
-Output: `paper_draft.md`, `experiments/`, `charts/`, `references.bib` — all in `./research_output/`
-
 ### Document Creation
-
-Create professional documents natively:
 
 | Skill | Format | Capabilities |
 |-------|--------|-------------|
@@ -177,8 +196,6 @@ Built-in multi-provider web search with automatic fallback:
 | **Tavily** | API key | No |
 | **Jina** | API key | Free tier |
 | **SearXNG** | Self-hosted URL | Yes |
-
-The agent can search the web and fetch pages using `web_search` and `web_fetch` tools — no setup required.
 
 ### Providers
 
@@ -203,24 +220,6 @@ The agent can search the web and fetch pages using `web_search` and `web_fetch` 
 | **Custom** | Any | Any OpenAI-compatible endpoint |
 
 Model format: `provider/model` — e.g., `ollama/qwen2.5-coder`, `anthropic/claude-sonnet-4-20250514`
-
-### MCP Integration
-
-9 pre-integrated MCP servers (auto-install via npx on first use):
-
-- `filesystem` — File operations
-- `memory` — Persistent knowledge graph
-- `fetch` — Web page fetching
-- `sequential-thinking` — Chain-of-thought reasoning
-- `context7` — Library documentation
-- `playwright` — Browser automation
-- `figma` — Design integration
-- `brave-search` — Web search
-- `everything` — Reference/testing server
-
-Optional: `github`, `puppeteer`, `firebase`, `serena`
-
-Also auto-imports MCP servers from your existing tool configurations.
 
 ### Skills (60+)
 
@@ -255,7 +254,7 @@ Custom skills: drop JSON files in `~/.lifeclaw/skills/`.
 
 ```
 lifeclaw/
-├── agent/          # Agent loop, memory, built-in tools (file, shell, web, docs)
+├── agent/          # Agent loop, memory, tools, sub-agents, cross-run learning, economics
 ├── providers/      # 17 LLM providers (Ollama, OpenAI, Anthropic, Gemini, ...)
 ├── mcp/            # MCP client (connects to any MCP server)
 ├── skills/         # 60+ built-in skills + custom skill loader
@@ -263,10 +262,10 @@ lifeclaw/
 ├── gateway/        # Gateway server (channels + cron + agent as service)
 ├── cron/           # Scheduled task execution
 ├── websearch/      # Multi-provider web search (Brave, DDG, Jina, Tavily, SearXNG)
-├── research/       # 23-stage autonomous research pipeline
+├── research/       # 23-stage research pipeline, real literature APIs, KB, citations
 ├── cli/            # Terminal UI (Rich + prompt-toolkit + questionary)
 ├── config/         # Configuration, setup wizard, loader
-├── server/         # WebSocket bridge to web dashboard
+├── server/         # WebSocket + static file server for web dashboard
 └── themes/         # 5 built-in themes
 web/                # Vite + React + shadcn web dashboard
 ```

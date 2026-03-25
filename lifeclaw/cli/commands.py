@@ -7,6 +7,7 @@ from pathlib import Path
 
 import typer
 from prompt_toolkit import PromptSession
+from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
 from rich.console import Console
@@ -26,6 +27,80 @@ from lifeclaw.cli.stream import (
 from lifeclaw.config.loader import load_config, save_config
 from lifeclaw.config.schema import get_config_dir
 from lifeclaw.themes import ALL_THEMES, get_theme
+
+
+class SlashCompleter(Completer):
+    """Auto-complete for / commands and skills — shows dropdown as you type."""
+
+    COMMANDS = [
+        ("/mode", "Switch mode (coder, general, researcher, shell)"),
+        ("/model", "Switch model"),
+        ("/theme", "Switch theme"),
+        ("/skill", "Activate a skill"),
+        ("/skills", "List all skills"),
+        ("/research", "Autonomous research pipeline"),
+        ("/review", "Code review current directory"),
+        ("/websearch", "Search the web"),
+        ("/spawn", "Run a sub-agent"),
+        ("/mcp", "MCP servers and tools"),
+        ("/learn", "View cross-run lessons"),
+        ("/channels", "Messaging integrations"),
+        ("/cron", "Scheduled tasks"),
+        ("/costs", "Token economics this session"),
+        ("/clear", "Clear conversation"),
+        ("/save", "Save session"),
+        ("/status", "Current status"),
+        ("/help", "Show help"),
+    ]
+
+    def __init__(self, skill_names: list[str] | None = None):
+        self.skill_names = skill_names or []
+
+    def get_completions(self, document, complete_event):
+        text = document.text_before_cursor
+
+        # Only trigger on / prefix
+        if not text.startswith("/"):
+            return
+
+        word = text.lstrip("/")
+
+        # Check if this is a combo (contains +)
+        if "+" in word:
+            # Complete the part after the last +
+            parts = word.split("+")
+            prefix = "+".join(parts[:-1]) + "+"
+            current = parts[-1]
+            for name in self.skill_names:
+                if name.startswith(current):
+                    yield Completion(
+                        name,
+                        start_position=-len(current),
+                        display=name,
+                        display_meta="skill",
+                    )
+            return
+
+        # Complete commands
+        for cmd, desc in self.COMMANDS:
+            cmd_name = cmd.lstrip("/")
+            if cmd_name.startswith(word):
+                yield Completion(
+                    cmd,
+                    start_position=-len(text),
+                    display=cmd,
+                    display_meta=desc,
+                )
+
+        # Complete skill names (as /skillname or for combos)
+        for name in self.skill_names:
+            if name.startswith(word):
+                yield Completion(
+                    f"/skill {name}",
+                    start_position=-len(text),
+                    display=f"/{name}",
+                    display_meta="skill",
+                )
 
 app = typer.Typer(
     name="lifeclaw",
@@ -106,9 +181,28 @@ async def _interactive_menu():
             # After setup, refresh config and loop back to menu
             config = load_config()
         elif action == "themes":
-            for t in ALL_THEMES.values():
-                active = " ●" if t.slug == config.theme else "  "
-                console.print(f"  {active} [{t.primary}]{t.name}[/] ({t.slug})")
+            import questionary as q_themes
+            theme_choices = [
+                questionary.Choice(
+                    f"{'●' if t.slug == config.theme else ' '} {t.name} ({t.slug})",
+                    value=t.slug,
+                )
+                for t in ALL_THEMES.values()
+            ]
+            selected_theme = await asyncio.to_thread(
+                lambda: q_themes.select(
+                    "Select theme:",
+                    choices=theme_choices,
+                    default=config.theme,
+                    instruction="(↑↓ to navigate, Enter to select)",
+                ).ask()
+            )
+            if selected_theme and selected_theme in ALL_THEMES:
+                config.theme = selected_theme
+                save_config(config)
+                theme = get_theme(config.theme)
+                console.print(f"  [{theme.primary}]Theme switched to {theme.name}![/]")
+                console.print(f"  [{theme.muted}]Some colors take effect on next restart.[/]")
             console.print()
         elif action == "skills":
             from lifeclaw.skills.manager import SkillsManager
@@ -341,9 +435,17 @@ async def _chat_async(
 
     console.print()
 
-    # Prompt session — no custom key bindings, just use / commands
+    # Prompt session with live / autocomplete
     history_file = get_config_dir() / "history"
-    session = PromptSession(history=FileHistory(str(history_file)))
+    from lifeclaw.skills.manager import SkillsManager
+    _skill_mgr = SkillsManager(config.skills_dir)
+    _all_skill_names = [s.name for s in _skill_mgr.list_skills()]
+    completer = SlashCompleter(skill_names=_all_skill_names)
+    session = PromptSession(
+        history=FileHistory(str(history_file)),
+        completer=completer,
+        complete_while_typing=True,
+    )
 
     try:
         while True:
@@ -433,6 +535,18 @@ async def _chat_async(
                     continue
 
             if user_input.startswith("/"):
+                # Detect combo skill shorthand: /docx+research → /skill docx+research
+                if "+" in user_input and not user_input.startswith("/skill"):
+                    combo = user_input.lstrip("/")
+                    # Check if all parts are valid skill names
+                    parts = [p.strip() for p in combo.split("+") if p.strip()]
+                    all_skills = all(
+                        any(s.name == p for s in _skill_mgr.list_skills())
+                        for p in parts
+                    )
+                    if all_skills:
+                        user_input = f"/skill {combo}"
+
                 result = await _handle_command(
                     user_input, config, console, theme, memory, agent,
                     current_mode, status, mcp
@@ -454,8 +568,10 @@ async def _chat_async(
                 # Update token estimate
                 status.token_count = memory.token_estimate
 
-                # Status line
+                # Status line with economics
                 renderer.finish()
+                cost_footer = agent.economics.cost_footer
+                console.print(f"  [{theme.muted}]{cost_footer}[/]")
 
                 # Show random tip ~25% of the time
                 if random.random() < 0.25:
@@ -473,10 +589,12 @@ async def _chat_async(
 
     finally:
         memory.save_session()
+        agent.economics.save_session()
         if ws_server:
             await ws_server.stop()
         await mcp.shutdown()
-        console.print(f"\n  [{theme.muted}]Session saved. Goodbye![/]")
+        cost_summary = agent.economics.summary
+        console.print(f"\n  [{theme.muted}]Session saved. {cost_summary['cost_display']} spent across {cost_summary['calls']} calls. Goodbye![/]")
 
 
 def _apply_mode(agent, mode_name: str):
@@ -513,10 +631,11 @@ async def _handle_command(
         table.add_row("/review", "PR-style code review of current directory")
         table.add_row("/mcp", "MCP servers and tools")
         table.add_row("/spawn [task]", "Run a sub-agent in parallel")
-        table.add_row("/learn", "View MetaClaw learned lessons")
+        table.add_row("/learn", "View cross-run learned lessons")
         table.add_row("/websearch [query]", "Search the web")
         table.add_row("/channels", "View messaging integrations")
         table.add_row("/cron", "View scheduled tasks")
+        table.add_row("/costs", "Token economics for this session")
         table.add_row("/clear", "Clear conversation")
         table.add_row("/save", "Save session")
         table.add_row("/status", "Current status")
@@ -644,12 +763,22 @@ async def _handle_command(
         from lifeclaw.skills.manager import SkillsManager
         mgr = SkillsManager(config.skills_dir)
         if arg:
-            skill = mgr.get(arg)
-            if skill:
-                memory.add_system(skill.system_prompt)
-                console.print(f"  [{theme.success}]Activated: {skill.name}[/] [{theme.muted}]— {skill.description}[/]")
-            else:
-                console.print(f"  [{theme.error}]Skill not found: {arg}[/]")
+            # Support combo skills: /skill docx+research or /skill docx+web-research
+            skill_names = [s.strip() for s in arg.replace("+", " ").replace(",", " ").split() if s.strip()]
+            activated = []
+            for sname in skill_names:
+                skill = mgr.get(sname)
+                if skill:
+                    memory.add_system(skill.system_prompt)
+                    activated.append(skill.name)
+                else:
+                    console.print(f"  [{theme.error}]Skill not found: {sname}[/]")
+            if activated:
+                if len(activated) > 1:
+                    console.print(f"  [{theme.success}]Combo activated: {' + '.join(activated)}[/]")
+                else:
+                    skill = mgr.get(activated[0])
+                    console.print(f"  [{theme.success}]Activated: {activated[0]}[/] [{theme.muted}]— {skill.description if skill else ''}[/]")
         else:
             # Arrow-key skill picker — mode-relevant skills first, then all
             import questionary
@@ -777,13 +906,13 @@ async def _handle_command(
             console.print(RichMarkdown(result))
 
     elif command == "/learn":
-        from lifeclaw.agent.metaclaw import MetaClawBridge
-        mc = MetaClawBridge()
+        from lifeclaw.agent.metaclaw import LearningBridge
+        mc = LearningBridge()
         lessons = mc.lessons
         if not lessons:
             console.print(f"  [{theme.muted}]No lessons learned yet. Lessons are extracted from research runs and errors.[/]")
         else:
-            console.print(f"  [bold {theme.primary}]MetaClaw Lessons ({len(lessons)})[/]")
+            console.print(f"  [bold {theme.primary}]Learned Lessons ({len(lessons)})[/]")
             for l in lessons[:15]:
                 console.print(f"  [{theme.accent}]{l.category}[/] [{theme.muted}]— {l.trigger}[/]")
                 console.print(f"    {l.content[:100]}")
@@ -826,6 +955,14 @@ async def _handle_command(
         else:
             for job in jobs:
                 console.print(f"  [{theme.accent}]{job.name}[/] ({job.schedule}) — {job.prompt[:60]}")
+
+    elif command == "/costs":
+        s = agent.economics.summary
+        console.print(f"  [bold {theme.primary}]Token Economics[/]")
+        console.print(f"  [{theme.accent}]LLM Calls:[/] {s['calls']}")
+        console.print(f"  [{theme.accent}]Input Tokens:[/] {s['input_tokens']:,}")
+        console.print(f"  [{theme.accent}]Output Tokens:[/] {s['output_tokens']:,}")
+        console.print(f"  [{theme.accent}]Total Cost:[/] {s['cost_display']}")
 
     elif command == "/clear":
         memory.clear()
@@ -956,17 +1093,21 @@ async def _research_async(topic: str):
     memory = Memory()
     agent = AgentLoop(provider=provider, model=model_name, memory=memory)
 
-    console.print(f"\n  [bold {theme.primary}]Research Pipeline[/]")
+    console.print(f"\n  [bold {theme.primary}]Research Pipeline (8 phases, 23 stages)[/]")
     console.print(f"  [{theme.muted}]Topic: {topic}[/]")
     console.print(f"  [{theme.muted}]Model: {model_name}[/]")
-    console.print(f"  [{theme.muted}]Stages: {len(STAGES)}[/]\n")
+    console.print(f"  [{theme.muted}]Features: PIVOT/REFINE loops, multi-agent debate, real literature APIs, citation verification[/]\n")
 
-    pipeline = ResearchPipeline(agent_fn=agent.process)
+    def _on_stage(idx, name, phase):
+        console.print(f"  [{theme.accent}][Phase {phase}][/] [{theme.muted}]Stage {idx+1}/23: {name}[/]")
+
+    pipeline = ResearchPipeline(agent_fn=agent.process, on_stage=_on_stage)
     run = await pipeline.run(topic)
 
     console.print(f"\n  [{theme.success}]Pipeline {run.status}![/]")
-    console.print(f"  [{theme.muted}]Stages completed: {len(run.stages_completed)}/{len(STAGES)}[/]")
-    console.print(f"  [{theme.muted}]Output: {run.output_dir}[/]\n")
+    console.print(f"  [{theme.muted}]Stages: {len(run.stages_completed)}/{len(STAGES)} | "
+                  f"Pivots: {run.pivot_count} | Refines: {run.refine_count}[/]")
+    console.print(f"  [{theme.muted}]Papers found: {len(run.papers_found)} | Output: {run.output_dir}[/]\n")
 
 
 @app.command()
@@ -999,7 +1140,14 @@ async def _web_async():
 
     ws = WebSocketServer(config, on_message=agent.process)
     await ws.start()
-    console.print(f"  [{theme.success}]● Web server at ws://{config.web.host}:{config.web.port}[/]")
+
+    # Also serve the static web dashboard
+    from lifeclaw.server.static import serve_web
+    http_port = config.web.port + 1
+    await serve_web(config.web.host, http_port)
+
+    console.print(f"  [{theme.success}]● WebSocket: ws://{config.web.host}:{config.web.port}[/]")
+    console.print(f"  [{theme.success}]● Dashboard: http://{config.web.host}:{http_port}[/]")
     console.print(f"  [{theme.muted}]Press Ctrl+C to stop[/]")
 
     try:
