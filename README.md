@@ -28,28 +28,41 @@ Most AI assistants force a choice: terminal or GUI, coding or general tasks, loc
 
 ## Quick Start
 
-### One-line install
+> **Requires Python 3.11+.** On macOS, the system Python is 3.9 — install a newer version via `brew install python@3.11` or [python.org](https://python.org).
+
+### npm (recommended — auto-installs Python package)
 
 ```bash
-# macOS / Linux / WSL
+npx lifeclaw setup    # One command, handles everything
+npx lifeclaw chat     # Start chatting
+
+# Or install globally
+npm install -g lifeclaw
+lifeclaw chat
+```
+
+### pip
+
+```bash
+pip3.11 install git+https://github.com/slashdoodleart/LifeClaw.git
+lifeclaw setup
+lifeclaw chat
+```
+
+### Shell script
+
+```bash
+# macOS / Linux / WSL (auto-finds Homebrew Python)
 curl -fsSL https://raw.githubusercontent.com/slashdoodleart/LifeClaw/main/install.sh | bash
 
 # Windows (PowerShell)
 irm https://raw.githubusercontent.com/slashdoodleart/LifeClaw/main/install.ps1 | iex
 ```
 
-### pip install
-
-```bash
-pip install lifeclaw
-lifeclaw setup    # Interactive setup (auto-detects Ollama, picks model, theme, MCP)
-lifeclaw chat     # Start chatting
-```
-
 ### Docker
 
 ```bash
-docker build -t lifeclaw .
+docker build -t lifeclaw https://github.com/slashdoodleart/LifeClaw.git
 docker run -it --network host -v ~/.lifeclaw:/root/.lifeclaw lifeclaw chat
 ```
 
@@ -58,7 +71,7 @@ docker run -it --network host -v ~/.lifeclaw:/root/.lifeclaw lifeclaw chat
 ```bash
 git clone https://github.com/slashdoodleart/LifeClaw.git
 cd LifeClaw
-pip install -e .
+python3.11 -m pip install -e .
 lifeclaw setup && lifeclaw chat
 ```
 

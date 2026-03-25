@@ -1,0 +1,18 @@
+{
+  "name": "lifeclaw",
+  "version": "0.1.0",
+  "description": "Hybrid AI assistant for terminal and web. Local-first with Ollama, 17 providers, MCP native.",
+  "bin": {
+    "lifeclaw": "./bin/lifeclaw.mjs"
+  },
+  "keywords": ["ai", "agent", "assistant", "ollama", "mcp", "terminal", "cli"],
+  "author": "Karthik <karthik20517@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/slashdoodleart/LifeClaw.git"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

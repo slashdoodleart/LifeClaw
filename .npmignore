@@ -1,0 +1,14 @@
+web/
+lifeclaw/
+assets/
+docs/
+*.py
+*.toml
+*.cfg
+__pycache__/
+*.egg-info/
+.git/
+.github/
+Dockerfile
+install.sh
+install.ps1
