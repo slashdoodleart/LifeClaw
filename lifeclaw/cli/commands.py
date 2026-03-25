@@ -58,14 +58,17 @@ MODES = {
     },
     "researcher": {
         "label": "researcher",
-        "description": "Research mode — thorough analysis, citations, deep exploration",
+        "description": "Research mode — thorough analysis, literature review, paper generation (AutoResearchClaw-inspired)",
         "system_addendum": (
-            "\nYou are in RESEARCHER MODE. Focus on thoroughness:\n"
+            "\nYou are in RESEARCHER MODE with AutoResearchClaw-inspired capabilities:\n"
             "- Explore broadly before answering\n"
-            "- Search multiple files and directories\n"
-            "- Provide comprehensive analysis\n"
-            "- Cite specific file paths and line numbers\n"
-            "- Summarize findings clearly\n"
+            "- Search multiple files, directories, and web sources\n"
+            "- For academic topics: search arXiv, Semantic Scholar, OpenAlex\n"
+            "- Provide comprehensive analysis with citations\n"
+            "- Cite specific file paths and line numbers for code\n"
+            "- Use /research <topic> for full autonomous paper generation\n"
+            "- Synthesize findings across multiple sources\n"
+            "- Identify gaps, contradictions, and open questions\n"
         ),
     },
     "shell": {
@@ -281,10 +284,11 @@ async def _handle_command(
         table.add_row("/skills", "List available skills")
         table.add_row("/skill [name]", "Activate a skill")
         table.add_row("/mcp", "List MCP servers and tools")
+        table.add_row("/research [topic]", "Start autonomous research pipeline on a topic")
+        table.add_row("/review", "Review code in current directory (PR-style)")
         table.add_row("/clear", "Clear conversation")
         table.add_row("/save", "Save session")
         table.add_row("/status", "Show current status")
-        table.add_row("/compact", "Toggle compact output")
         table.add_row("exit", "Quit")
         console.print(table)
 
@@ -351,6 +355,45 @@ async def _handle_command(
         else:
             console.print(f"  [{theme.muted}]No MCP servers configured[/]")
 
+    elif command == "/research":
+        if not arg:
+            console.print(f"  [{theme.warning}]Usage: /research <topic>[/]")
+            console.print(f"  [{theme.muted}]Example: /research transformer attention mechanisms for long documents[/]")
+        else:
+            # Activate research-paper skill and inject the topic
+            from lifeclaw.skills.manager import SkillsManager
+            mgr = SkillsManager(config.skills_dir)
+            skill = mgr.get("research-paper")
+            if skill:
+                memory.add_system(skill.system_prompt)
+                console.print(f"  [{theme.success}]● Research pipeline activated[/]")
+                console.print(f"  [{theme.muted}]Topic: {arg}[/]")
+                console.print(f"  [{theme.muted}]Stages: ideation → literature → methodology → experiments → analysis → writing → review[/]")
+                # Feed the topic as a user message for the agent to process
+                research_prompt = (
+                    f"Execute the full autonomous research pipeline for this topic:\n\n"
+                    f"**{arg}**\n\n"
+                    f"Follow all 7 stages. Create output files in ./research_output/. "
+                    f"Search the web for real papers. Write runnable experiment code. "
+                    f"Produce a complete paper draft in markdown."
+                )
+                memory.add_user(research_prompt)
+                console.print(f"  [{theme.info}]Starting research... this may take a while.[/]\n")
+
+    elif command == "/review":
+        # Code review of current directory changes
+        review_prompt = (
+            "Review the code in the current directory. Do a thorough review:\n"
+            "1. Run `git diff` to see recent changes\n"
+            "2. Run `git status` to see modified files\n"
+            "3. Read each modified file\n"
+            "4. Check for bugs, security issues, code quality\n"
+            "5. Produce a structured review with specific line references\n"
+            "If no git changes, review the project structure and key files."
+        )
+        memory.add_user(review_prompt)
+        console.print(f"  [{theme.info}]Starting code review...[/]\n")
+
     elif command == "/clear":
         memory.clear()
         console.print(f"  [{theme.success}]Conversation cleared.[/]")
@@ -361,9 +404,6 @@ async def _handle_command(
 
     elif command == "/status":
         status.render()
-
-    elif command == "/compact":
-        console.print(f"  [{theme.muted}]Compact mode toggled.[/]")
 
     return None
 
