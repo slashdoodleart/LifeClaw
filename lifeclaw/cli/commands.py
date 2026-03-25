@@ -120,14 +120,19 @@ async def _chat_async(
     console = Console(theme=make_rich_theme(theme))
     current_mode = initial_mode if initial_mode in MODES else "general"
 
-    # Compact banner (Claude Code style — minimal, informative)
+    # Compact banner (Claude Code style)
+    import random
+    from lifeclaw.config.defaults import TIPS
+
     console.print()
     title = Text()
     title.append("  LifeClaw", style=f"bold {theme.primary}")
     title.append(f" v{__version__}", style=f"{theme.muted}")
     console.print(title)
     console.print(f"  [{theme.muted}]model: {model_override or config.agent.model} · mode: {current_mode} · theme: {theme.name}[/]")
-    console.print(f"  [{theme.muted}]Type /help for commands · /mode to switch · exit to quit[/]")
+    console.print(f"  [{theme.muted}]/help for commands · /mode to switch · exit to quit[/]")
+    # Random tip like Claude Code
+    console.print(f"  [{theme.muted}]{random.choice(TIPS)}[/]")
     console.print()
 
     # Initialize provider
@@ -239,6 +244,10 @@ async def _chat_async(
                 # Status line
                 renderer.finish()
 
+                # Show random tip ~25% of the time (like Claude Code)
+                if random.random() < 0.25:
+                    console.print(f"  [{theme.muted}]{random.choice(TIPS)}[/]")
+
                 # Broadcast to web clients
                 if ws_server:
                     await ws_server.broadcast_stream(response)
@@ -297,11 +306,26 @@ async def _handle_command(
             console.print(f"  [{theme.success}]Switched to {arg} mode[/] [{theme.muted}]— {MODES[arg]['description']}[/]")
             return f"MODE:{arg}"
         else:
-            console.print(f"  [{theme.muted}]Available modes:[/]")
-            for name, info in MODES.items():
-                marker = " ●" if name == current_mode else "  "
-                color = theme.accent if name == current_mode else theme.muted
-                console.print(f"  [{color}]{marker} {name}[/] [{theme.muted}]— {info['description']}[/]")
+            # Arrow-key interactive menu
+            import questionary
+            mode_choices = [
+                questionary.Choice(
+                    f"{name} — {info['description']}",
+                    value=name,
+                )
+                for name, info in MODES.items()
+            ]
+            selected = await asyncio.to_thread(
+                lambda: questionary.select(
+                    "Select mode (arrow keys):",
+                    choices=mode_choices,
+                    default=current_mode,
+                    instruction="(↑↓ to navigate, Enter to select)",
+                ).ask()
+            )
+            if selected and selected in MODES:
+                console.print(f"  [{theme.success}]Switched to {selected} mode[/]")
+                return f"MODE:{selected}"
 
     elif command == "/theme":
         if arg in ALL_THEMES:
@@ -309,10 +333,23 @@ async def _handle_command(
             save_config(config)
             console.print(f"  [{theme.success}]Theme → {arg}. Restart for full effect.[/]")
         else:
-            for t in ALL_THEMES.values():
-                marker = " ●" if t.slug == config.theme else "  "
-                color = theme.accent if t.slug == config.theme else theme.muted
-                console.print(f"  [{color}]{marker} {t.slug}[/] [{theme.muted}]— {t.name}[/]")
+            import questionary
+            theme_choices = [
+                questionary.Choice(f"{t.name} ({t.slug})", value=t.slug)
+                for t in ALL_THEMES.values()
+            ]
+            selected = await asyncio.to_thread(
+                lambda: questionary.select(
+                    "Select theme (arrow keys):",
+                    choices=theme_choices,
+                    default=config.theme,
+                    instruction="(↑↓ to navigate, Enter to select)",
+                ).ask()
+            )
+            if selected:
+                config.theme = selected
+                save_config(config)
+                console.print(f"  [{theme.success}]Theme → {selected}. Restart for full effect.[/]")
 
     elif command == "/model":
         if arg:
@@ -329,15 +366,37 @@ async def _handle_command(
             console.print(f"  [{theme.accent}]{s.name}[/] [{theme.muted}]({s.category}) — {s.description}[/]")
 
     elif command == "/skill":
+        from lifeclaw.skills.manager import SkillsManager
+        mgr = SkillsManager(config.skills_dir)
         if arg:
-            from lifeclaw.skills.manager import SkillsManager
-            mgr = SkillsManager(config.skills_dir)
             skill = mgr.get(arg)
             if skill:
                 memory.add_system(skill.system_prompt)
-                console.print(f"  [{theme.success}]Activated: {skill.name}[/]")
+                console.print(f"  [{theme.success}]Activated: {skill.name}[/] [{theme.muted}]— {skill.description}[/]")
             else:
                 console.print(f"  [{theme.error}]Skill not found: {arg}[/]")
+        else:
+            # Arrow-key interactive skill selector
+            import questionary
+            skill_choices = [
+                questionary.Choice(
+                    f"{s.name} ({s.category}) — {s.description}",
+                    value=s.name,
+                )
+                for s in mgr.list_skills()
+            ]
+            selected = await asyncio.to_thread(
+                lambda: questionary.select(
+                    "Select skill (arrow keys):",
+                    choices=skill_choices,
+                    instruction="(↑↓ to navigate, Enter to select)",
+                ).ask()
+            )
+            if selected:
+                skill = mgr.get(selected)
+                if skill:
+                    memory.add_system(skill.system_prompt)
+                    console.print(f"  [{theme.success}]Activated: {skill.name}[/] [{theme.muted}]— {skill.description}[/]")
 
     elif command == "/mcp":
         if config.mcp_servers:
